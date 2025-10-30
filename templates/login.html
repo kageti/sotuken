@@ -35,12 +35,12 @@
         <form id="loginForm" action="{{ url_for('login') }}" method="post" novalidate>
           <div class="mb-3">
             <label for="email" class="form-label">メールアドレス</label>
-            <input type="text" class="form-control" id="email" name="email" required placeholder="test または test@example.com">
+            <input type="text" class="form-control" id="email" name="email" required placeholder="ID">
             <div class="invalid-feedback">メールアドレスを入力してください。</div>
           </div>
           <div class="mb-3">
             <label for="password" class="form-label">パスワード</label>
-            <input type="password" class="form-control" id="password" name="password" required placeholder="pass">
+            <input type="password" class="form-control" id="password" name="password" required placeholder="パスワード">
             <div class="invalid-feedback">パスワードを入力してください。</div>
           </div>
           <button type="submit" class="btn btn-primary w-100">ログイン</button>
