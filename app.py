@@ -1,22 +1,80 @@
-from flask import Flask, render_template
+from flask import Flask, render_template, request, redirect, url_for, flash, session
 
 app = Flask(__name__)
-app.config["SECRET_KEY"] = "change-me"  # 後でenv変数に退避推奨
+app.config["SECRET_KEY"] = "change-me"  # 本番は環境変数へ
+
+# --- 仮ユーザーストア（DBなしで動かす用） ---
+# 既定で "test" / "test@example.com" のどちらでもログインOK、パスワードは "pass"
+users = {
+    "test": {"password": "pass"},
+    "test@example.com": {"password": "pass"},
+}
+
+# --- ヘルパ ---
+def is_logged_in():
+    return "user" in session
 
 # --- Home ---
 @app.route("/")
 def home():
-    return render_template("index.html")
+    return render_template("index.html", logged_in=is_logged_in(), user=session.get("user"))
 
-# --- プレースホルダー（未実装画面） ---
-@app.route("/login")
+# --- ログイン ---
+@app.route("/login", methods=["GET", "POST"])
 def login():
-    return _placeholder("ログイン画面")
+    if request.method == "POST":
+        email = (request.form.get("email") or "").strip()
+        password = request.form.get("password") or ""
+        # 仮認証：メール欄に "test" または "test@example.com" かつ pw=="pass" でOK
+        if email in users and users[email]["password"] == password:
+            session["user"] = email
+            flash("ログインしました。", "success")
+            return redirect(url_for("home"))
+        else:
+            # まだDBがないため、未登録/パスワード不一致をまとめて「認証エラー」と表示
+            flash("メールアドレスまたはパスワードが正しくありません。", "danger")
+            return redirect(url_for("login"))
+    # GET
+    return render_template("login.html")
 
-@app.route("/register")
+# --- ログアウト ---
+@app.route("/logout")
+def logout():
+    session.pop("user", None)
+    flash("ログアウトしました。", "info")
+    return redirect(url_for("home"))
+
+# --- 新規会員登録（DBなしの簡易動作） ---
+@app.route("/register", methods=["GET", "POST"])
 def register():
-    return _placeholder("新規会員登録画面")
+    if request.method == "POST":
+        email = (request.form.get("email") or "").strip()
+        password = request.form.get("password") or ""
+        confirm = request.form.get("confirm") or ""
 
+        # 簡易バリデーション（最低限）
+        if not email or "@" not in email:
+            flash("正しいメールアドレスを入力してください。", "warning")
+            return redirect(url_for("register"))
+        if len(password) < 6:
+            flash("パスワードは6文字以上にしてください。", "warning")
+            return redirect(url_for("register"))
+        if password != confirm:
+            flash("確認用パスワードが一致しません。", "warning")
+            return redirect(url_for("register"))
+        if email in users:
+            flash("このメールアドレスはすでに登録されています。", "danger")
+            return redirect(url_for("register"))
+
+        # 仮登録：メモリ上の dict に追加（サーバ再起動で消えます）
+        users[email] = {"password": password}
+        flash("登録が完了しました。ログインしてください。", "success")
+        return redirect(url_for("login"))
+
+    # GET
+    return render_template("register.html")
+
+# --- プレースホルダー（将来実装予定の画面用） ---
 @app.route("/favorites/stores")
 def favorites_stores():
     return _placeholder("お気に入り店舗画面")
@@ -46,7 +104,6 @@ def mypage():
     return _placeholder("マイページ画面")
 
 def _placeholder(title: str) -> str:
-    # 追加のテンプレートは作らず、この場で簡易HTMLを返す
     return f"""
     <!doctype html>
     <html lang="ja">
@@ -71,8 +128,4 @@ def _placeholder(title: str) -> str:
     """
 
 if __name__ == "__main__":
-    # 開発用サーバ（本番ではWSGI/ASGIを使用）
     app.run(host="127.0.0.1", port=5000, debug=True)
-
-
-    #おっぱいおっぱい
