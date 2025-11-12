@@ -1,16 +1,116 @@
 from flask import Flask, render_template, request, redirect, url_for, flash, session
+from datetime import datetime
 
 app = Flask(__name__)
 app.config["SECRET_KEY"] = "change-me"  # 本番は環境変数へ
 
 # --- 仮ユーザーストア（DBなしで動かす用） ---
-# 既定で "test" / "test@example.com" のどちらでもログインOK、パスワードは "pass"
 users = {
     "test": {"password": "pass"},
     "test@example.com": {"password": "pass"},
 }
 
-# --- ヘルパ ---
+# --- 仮プロダクトデータ（将来はDBに置換） ---
+# 必要に応じて product_id を PK、JAN はユニークにする想定
+MOCK_PRODUCTS = [
+    {
+        "product_id": 1,
+        "jan": "4901234567890",
+        "name": "明治 おいしい牛乳 1000ml",
+        "brand": "明治",
+        "category": "乳製品",
+        "price": 228,
+        "store": "スーパーA 広島駅前店",
+        "trust": 72,
+        "updated_at": "2025-11-05T10:12:00"
+    },
+    {
+        "product_id": 2,
+        "jan": "4902713123456",
+        "name": "日清 カップヌードル しょうゆ 78g",
+        "brand": "日清",
+        "category": "インスタント",
+        "price": 158,
+        "store": "ドラッグB 猿猴橋店",
+        "trust": 65,
+        "updated_at": "2025-11-11T18:40:00"
+    },
+    {
+        "product_id": 3,
+        "jan": "4901777301234",
+        "name": "コカ・コーラ 500ml ペット",
+        "brand": "コカ・コーラ",
+        "category": "飲料",
+        "price": 98,
+        "store": "スーパーA 広島駅前店",
+        "trust": 80,
+        "updated_at": "2025-11-06T12:00:00"
+    },
+    {
+        "product_id": 4,
+        "jan": "4901002134567",
+        "name": "キッコーマン しょうゆ 1L",
+        "brand": "キッコーマン",
+        "category": "調味料",
+        "price": 268,
+        "store": "スーパーC 段原店",
+        "trust": 55,
+        "updated_at": "2025-11-10T09:25:00"
+    },
+    {
+        "product_id": 5,
+        "jan": "4901085198765",
+        "name": "ハウス バーモントカレー 中辛 230g",
+        "brand": "ハウス",
+        "category": "レトルト",
+        "price": 198,
+        "store": "ドラッグB 猿猴橋店",
+        "trust": 60,
+        "updated_at": "2025-11-09T16:10:00"
+    },
+    {
+        "product_id": 6,
+        "jan": "4901411234001",
+        "name": "サントリー 天然水 2L",
+        "brand": "サントリー",
+        "category": "飲料",
+        "price": 95,
+        "store": "スーパーD 横川店",
+        "trust": 77,
+        "updated_at": "2025-11-12T08:00:00"
+    },
+    {
+        "product_id": 7,
+        "jan": "4903301234567",
+        "name": "ヤマザキ ダブルソフト 6枚",
+        "brand": "山崎製パン",
+        "category": "パン",
+        "price": 178,
+        "store": "スーパーC 段原店",
+        "trust": 58,
+        "updated_at": "2025-11-07T11:30:00"
+    },
+    {
+        "product_id": 8,
+        "jan": "4902720123012",
+        "name": "UCC ブラック無糖 185g 缶",
+        "brand": "UCC",
+        "category": "飲料",
+        "price": 78,
+        "store": "コンビニE 広大病院前店",
+        "trust": 68,
+        "updated_at": "2025-11-08T21:05:00"
+    },
+]
+
+# ユーティリティ：日付→datetime
+def _parse_dt(s: str) -> datetime:
+    try:
+        return datetime.fromisoformat(s)
+    except Exception:
+        return datetime.min
+
+# --- 認証ヘルパ ---
 def is_logged_in():
     return "user" in session
 
@@ -25,16 +125,12 @@ def login():
     if request.method == "POST":
         email = (request.form.get("email") or "").strip()
         password = request.form.get("password") or ""
-        # 仮認証：メール欄に "test" または "test@example.com" かつ pw=="pass" でOK
         if email in users and users[email]["password"] == password:
             session["user"] = email
             flash("ログインしました。", "success")
             return redirect(url_for("home"))
-        else:
-            # まだDBがないため、未登録/パスワード不一致をまとめて「認証エラー」と表示
-            flash("メールアドレスまたはパスワードが正しくありません。", "danger")
-            return redirect(url_for("login"))
-    # GET
+        flash("メールアドレスまたはパスワードが正しくありません。", "danger")
+        return redirect(url_for("login"))
     return render_template("login.html")
 
 # --- ログアウト ---
@@ -44,15 +140,13 @@ def logout():
     flash("ログアウトしました。", "info")
     return redirect(url_for("home"))
 
-# --- 新規会員登録（DBなしの簡易動作） ---
+# --- 新規会員登録 ---
 @app.route("/register", methods=["GET", "POST"])
 def register():
     if request.method == "POST":
         email = (request.form.get("email") or "").strip()
         password = request.form.get("password") or ""
         confirm = request.form.get("confirm") or ""
-
-        # 簡易バリデーション（最低限）
         if not email or "@" not in email:
             flash("正しいメールアドレスを入力してください。", "warning")
             return redirect(url_for("register"))
@@ -65,23 +159,95 @@ def register():
         if email in users:
             flash("このメールアドレスはすでに登録されています。", "danger")
             return redirect(url_for("register"))
-
-        # 仮登録：メモリ上の dict に追加（サーバ再起動で消えます）
         users[email] = {"password": password}
         flash("登録が完了しました。ログインしてください。", "success")
         return redirect(url_for("login"))
-
-    # GET
     return render_template("register.html")
 
-# --- プレースホルダー（将来実装予定の画面用） ---
-@app.route("/favorites/stores")
-def favorites_stores():
-    return _placeholder("お気に入り店舗画面")
+# =========================
+# 商品検索（仮データ版）
+# =========================
+def search_products_service(q: str | None, sort: str | None, price_min: int | None, price_max: int | None):
+    """
+    将来はここをDAO（MySQL）に差し替え。
+    - q: フリーワード/JAN
+    - sort: price_asc / recent / trust_desc
+    - price_min/max: 価格フィルタ
+    """
+    q = (q or "").strip()
+    sort = (sort or "price_asc").strip()
+    results = []
+
+    def match(product):
+        # JAN 完全一致 or 前方一致
+        if q and q.isdigit():
+            if product["jan"].startswith(q):
+                return True
+        # テキスト部分一致（name, brand, category, store）
+        if q:
+            key = f"{product['name']} {product['brand']} {product['category']} {product['store']} {product['jan']}".lower()
+            if q.lower() not in key:
+                return False
+        # 価格フィルタ
+        if price_min is not None and product["price"] < price_min:
+            return False
+        if price_max is not None and product["price"] > price_max:
+            return False
+        return True
+
+    for p in MOCK_PRODUCTS:
+        if match(p):
+            results.append(p)
+
+    # 並び替え
+    if sort == "price_asc":
+        results.sort(key=lambda x: x["price"])
+    elif sort == "recent":
+        results.sort(key=lambda x: _parse_dt(x["updated_at"]), reverse=True)
+    elif sort == "trust_desc":
+        results.sort(key=lambda x: x["trust"], reverse=True)
+    else:
+        results.sort(key=lambda x: x["price"])  # デフォルト
+
+    return results
 
 @app.route("/search/products")
 def search_products():
-    return _placeholder("商品検索画面")
+    q = request.args.get("q", "")
+    sort = request.args.get("sort", "price_asc")
+    price_min = request.args.get("price_min")
+    price_max = request.args.get("price_max")
+
+    try:
+        price_min_i = int(price_min) if price_min else None
+    except ValueError:
+        price_min_i = None
+    try:
+        price_max_i = int(price_max) if price_max else None
+    except ValueError:
+        price_max_i = None
+
+    results = search_products_service(q, sort, price_min_i, price_max_i)
+
+    # ストア一覧（フィルタUIの将来拡張用）
+    store_names = sorted(list({p["store"] for p in MOCK_PRODUCTS}))
+
+    return render_template(
+        "search_products.html",
+        q=q,
+        sort=sort,
+        price_min=price_min or "",
+        price_max=price_max or "",
+        results=results,
+        store_names=store_names,
+        logged_in=is_logged_in(),
+        user=session.get("user")
+    )
+
+# --- 近隣店舗などプレースホルダー ---
+@app.route("/favorites/stores")
+def favorites_stores():
+    return _placeholder("お気に入り店舗画面")
 
 @app.route("/search/stores")
 def search_stores():
