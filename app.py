@@ -12,7 +12,7 @@ users = {
 
 # --- 仮プロダクトデータ（将来はDBに置換） ---
 # 必要に応じて product_id を PK、JAN はユニークにする想定
-MOCK_PRODUCTS = [
+""" MOCK_PRODUCTS = [
     {
         "product_id": 1,
         "jan": "4901234567890",
@@ -101,7 +101,7 @@ MOCK_PRODUCTS = [
         "trust": 68,
         "updated_at": "2025-11-08T21:05:00"
     },
-]
+] """
 
 # ユーティリティ：日付→datetime
 def _parse_dt(s: str) -> datetime:
