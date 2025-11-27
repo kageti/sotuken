@@ -1,20 +1,23 @@
-import os
-from dotenv import load_dotenv
+# db.py
 import mysql.connector
 from mysql.connector import pooling
 
-load_dotenv()
 
-POOL = pooling.MySQLConnectionPool(
+DB_CONFIG = {
+    "host": "localhost",
+    "port": 3306,
+    "user": "root",
+    "password": "password",
+    "database": "sotuken",
+}
+
+# コネクションプール（同時アクセスにも強くなる）
+connection_pool = pooling.MySQLConnectionPool(
     pool_name="sotuken_pool",
     pool_size=5,
-    host=os.getenv("DB_HOST"),
-    port=int(os.getenv("DB_PORT", "3306")),
-    database=os.getenv("DB_NAME"),
-    user=os.getenv("DB_USER"),
-    password=os.getenv("DB_PASSWORD"),
-    autocommit=True,
+    **DB_CONFIG
 )
 
-def get_conn():
-    return POOL.get_connection()
+def get_connection():
+    
+    return connection_pool.get_connection()

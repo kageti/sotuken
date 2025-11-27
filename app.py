@@ -1,5 +1,6 @@
 from flask import Flask, render_template, request, redirect, url_for, flash, session
 from datetime import datetime
+from dao.products_dao import ProductDAO
 
 app = Flask(__name__)
 app.config["SECRET_KEY"] = "change-me"  # 本番は環境変数へ
@@ -167,16 +168,21 @@ def register():
 # =========================
 # 商品検索（仮データ版）
 # =========================
-def search_products_service(q: str | None, sort: str | None, price_min: int | None, price_max: int | None):
+def search_products_service(
+    q: str | None,
+    sort: str | None,
+    price_min: int | None,
+    price_max: int | None
+):
     """
-    将来はここをDAO（MySQL）に差し替え。
-    - q: フリーワード/JAN
-    - sort: price_asc / recent / trust_desc
-    - price_min/max: 価格フィルタ
+    DB（souken）の products テーブルから検索する想定。
+    - q: フリーワード / JAN
+    - sort: price_asc / recent / trust_desc （今はとりあえず名前順）
+    - price_min/max: 価格フィルタ（あとで実装）
     """
+    
     q = (q or "").strip()
     sort = (sort or "price_asc").strip()
-    results = []
 
     def match(product):
         # JAN 完全一致 or 前方一致
@@ -195,21 +201,24 @@ def search_products_service(q: str | None, sort: str | None, price_min: int | No
             return False
         return True
 
-    for p in MOCK_PRODUCTS:
-        if match(p):
-            results.append(p)
-
-    # 並び替え
-    if sort == "price_asc":
-        results.sort(key=lambda x: x["price"])
-    elif sort == "recent":
-        results.sort(key=lambda x: _parse_dt(x["updated_at"]), reverse=True)
-    elif sort == "trust_desc":
-        results.sort(key=lambda x: x["trust"], reverse=True)
+    if q:
+        products = ProductDAO.search_by_keyword(q)
     else:
-        results.sort(key=lambda x: x["price"])  # デフォルト
+        products = []
 
-    return results
+    # まだ price, trust, updated_at などを DB 側で持っていない前提で、
+    # いったんソートは「商品名」でごまかしておく
+    if sort == "price_asc":
+        products.sort(key=lambda p: getattr(p, "name", ""))
+    elif sort == "recent":
+        # updated_at カラムを Product に持たせたらここで使う
+        products.sort(key=lambda p: getattr(p, "id", 0), reverse=True)
+    elif sort == "trust_desc":
+        # trust カラムを持たせたらここで使う
+        products.sort(key=lambda p: getattr(p, "id", 0), reverse=True)
+
+    # ひとまず price_min / price_max は未使用（あとで拡張）
+    return products
 
 @app.route("/search/products")
 def search_products():
@@ -230,7 +239,7 @@ def search_products():
     results = search_products_service(q, sort, price_min_i, price_max_i)
 
     # ストア一覧（フィルタUIの将来拡張用）
-    store_names = sorted(list({p["store"] for p in MOCK_PRODUCTS}))
+    store_names = []
 
     return render_template(
         "search_products.html",
