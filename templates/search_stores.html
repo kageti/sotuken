@@ -1,0 +1,214 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>近隣店舗検索 - 価格比較アプリ</title>
+
+  <!-- Bootstrap -->
+  <link
+    href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"
+    rel="stylesheet"
+  >
+
+  <style>
+    body {
+      background: #f8f9fa;
+    }
+    .page-header {
+      border-bottom: 1px solid #dee2e6;
+      background: #fff;
+    }
+    .store-card {
+      transition: transform .12s ease, box-shadow .12s ease;
+    }
+    .store-card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 18px rgba(0,0,0,0.08);
+    }
+    .badge-type {
+      font-size: .75rem;
+    }
+    .rating-pill {
+      font-size: .8rem;
+      padding: .15rem .45rem;
+      border-radius: 999px;
+      background: #fff3cd;
+      color: #856404;
+    }
+  </style>
+</head>
+
+<body>
+  <!-- 共通っぽいヘッダー -->
+  <header class="page-header py-3 mb-4">
+    <div class="container d-flex justify-content-between align-items-center">
+      <div class="h4 m-0">近隣店舗検索</div>
+      <nav class="d-flex gap-2">
+        <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('home') }}">ホーム</a>
+        <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('search_products') }}">商品検索</a>
+        {% if logged_in %}
+          <span class="text-muted small align-self-center">{{ user }}</span>
+          <a class="btn btn-primary btn-sm" href="{{ url_for('mypage') }}">マイページ</a>
+          <a class="btn btn-outline-danger btn-sm" href="{{ url_for('logout') }}">ログアウト</a>
+        {% else %}
+          <a class="btn btn-primary btn-sm" href="{{ url_for('login') }}">ログイン</a>
+          <a class="btn btn-outline-primary btn-sm" href="{{ url_for('register') }}">新規登録</a>
+        {% endif %}
+      </nav>
+    </div>
+  </header>
+
+  <main class="container pb-5">
+    <div class="row g-4">
+      <!-- 左：検索条件カード -->
+      <div class="col-lg-4">
+        <div class="card shadow-sm">
+          <div class="card-body">
+            <h5 class="card-title mb-3">現在地から探す</h5>
+            <p class="text-muted small mb-3">
+              ブラウザの位置情報を使って、半径1.5km以内のスーパーを検索します。
+            </p>
+
+            <div class="d-grid mb-3">
+              <button class="btn btn-primary" id="btn-search">
+                📍 現在地から検索
+              </button>
+            </div>
+
+            <div class="mb-2">
+              <label class="form-label small text-muted mb-1">カテゴリ（今は固定）</label>
+              <div class="form-control form-control-sm bg-light">
+                スーパー（Google Places の <code>supermarket</code>）
+              </div>
+            </div>
+
+            <div class="mt-3 small text-muted" id="status"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 右：結果カード -->
+      <div class="col-lg-8">
+        <div class="card shadow-sm">
+          <div class="card-body">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+              <h5 class="card-title mb-0">検索結果</h5>
+              <span class="small text-muted" id="result-count"></span>
+            </div>
+            <div id="result-list" class="vstack gap-3">
+              <p class="text-muted small mb-0">
+                「現在地から検索」ボタンを押すと、近くの店舗がカード形式で表示されます。
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    const btn = document.getElementById("btn-search");
+    const statusEl = document.getElementById("status");
+    const resultList = document.getElementById("result-list");
+    const resultCount = document.getElementById("result-count");
+
+    function setStatus(msg) {
+      statusEl.textContent = msg;
+    }
+
+    function renderStores(places) {
+      resultList.innerHTML = "";
+      resultCount.textContent = "";
+
+      if (!places || !places.length) {
+        resultList.innerHTML =
+          '<p class="text-muted small mb-0">近隣にスーパーが見つかりませんでした。</p>';
+        return;
+      }
+
+      resultCount.textContent = `${places.length}件ヒット`;
+
+      for (const p of places) {
+        const card = document.createElement("div");
+        card.className = "card store-card border-0 shadow-sm";
+
+        const name = p.name ?? "名称不明の店舗";
+        const address = p.address ?? "住所情報なし";
+        const rating = p.rating ?? null;
+
+        card.innerHTML = `
+          <div class="card-body">
+            <div class="d-flex justify-content-between align-items-start mb-1">
+              <div>
+                <h6 class="card-title mb-1">${name}</h6>
+                <div class="text-muted small">
+                  <i class="bi bi-geo-alt-fill"></i> ${address}
+                </div>
+              </div>
+              <div class="text-end">
+                <span class="badge bg-success-subtle text-success badge-type">
+                  スーパー
+                </span>
+                ${rating
+                  ? `<div class="mt-1 rating-pill">評価 ${rating.toFixed ? rating.toFixed(1) : rating} / 5</div>`
+                  : `<div class="mt-1 small text-muted">評価情報なし</div>`
+                }
+              </div>
+            </div>
+          </div>
+        `;
+        resultList.appendChild(card);
+      }
+    }
+
+    btn.addEventListener("click", () => {
+      if (!navigator.geolocation) {
+        alert("このブラウザでは位置情報が利用できません。");
+        return;
+      }
+
+      setStatus("現在地を取得中…");
+
+      navigator.geolocation.getCurrentPosition(async pos => {
+        const { latitude, longitude } = pos.coords;
+        setStatus("近隣の店舗を検索中…");
+
+        try {
+          const res = await fetch("/api/nearby_stores", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ lat: latitude, lng: longitude })
+          });
+
+          const data = await res.json();
+
+          if (data.error) {
+            setStatus("エラー: " + data.error);
+            renderStores([]);
+          } else {
+            setStatus("検索完了");
+            renderStores(data.places || []);
+          }
+        } catch (e) {
+          console.error(e);
+          setStatus("通信エラーが発生しました。");
+          renderStores([]);
+        }
+      }, err => {
+        console.error(err);
+        setStatus("位置情報が取得できません: " + err.message);
+      }, {
+        enableHighAccuracy: true,
+        timeout: 10000
+      });
+    });
+  </script>
+
+  <!-- Bootstrap Icons（住所アイコン用、不要なら削除可） -->
+  <link
+    rel="stylesheet"
+    href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css"
+  >
+</body>
+</html>
