@@ -1,6 +1,8 @@
 from flask import Flask, render_template, request, redirect, url_for, flash, session
 from datetime import datetime
 from dao.products_dao import ProductDAO
+from dao.users_dao import UserDAO, UserAlreadyExists
+from werkzeug.security import check_password_hash
 
 app = Flask(__name__)
 app.config["SECRET_KEY"] = "change-me"  # 本番は環境変数へ
@@ -126,6 +128,11 @@ def login():
     if request.method == "POST":
         email = (request.form.get("email") or "").strip()
         password = request.form.get("password") or ""
+        user = UserDAO.find_by_email(email)
+        if user and check_password_hash(user.password_hash, password):
+            session["user"] = email
+            flash("ログインしました。", "success")
+            return redirect(url_for("home"))
         if email in users and users[email]["password"] == password:
             session["user"] = email
             flash("ログインしました。", "success")
@@ -157,13 +164,18 @@ def register():
         if password != confirm:
             flash("確認用パスワードが一致しません。", "warning")
             return redirect(url_for("register"))
-        if email in users:
+        if UserDAO.find_by_email(email) or email in users:
             flash("このメールアドレスはすでに登録されています。", "danger")
             return redirect(url_for("register"))
-        users[email] = {"password": password}
+        try:
+            UserDAO.create_user(email, password)
+        except UserAlreadyExists:
+            flash("このメールアドレスはすでに登録されています。", "danger")
+            return redirect(url_for("register"))
         flash("登録が完了しました。ログインしてください。", "success")
         return redirect(url_for("login"))
     return render_template("register.html")
+
 
 # =========================
 # 商品検索（仮データ版）
