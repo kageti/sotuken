@@ -1,8 +1,17 @@
-from flask import Flask, render_template, request, redirect, url_for, flash, session
+import os
+import requests
+from dotenv import load_dotenv
+from flask import Flask, render_template, request, redirect, url_for, flash, session, jsonify
 from datetime import datetime
 from dao.products_dao import ProductDAO
 from dao.users_dao import UserDAO, UserAlreadyExists
 from werkzeug.security import check_password_hash
+import os
+import requests
+from dotenv import load_dotenv
+
+load_dotenv()  # .env 読み込み
+GOOGLE_PLACES_KEY = os.getenv("GOOGLE_PLACES_KEY")
 
 app = Flask(__name__)
 app.config["SECRET_KEY"] = "change-me"  # 本番は環境変数へ
@@ -13,98 +22,6 @@ users = {
     "test@example.com": {"password": "pass"},
 }
 
-# --- 仮プロダクトデータ（将来はDBに置換） ---
-# 必要に応じて product_id を PK、JAN はユニークにする想定
-""" MOCK_PRODUCTS = [
-    {
-        "product_id": 1,
-        "jan": "4901234567890",
-        "name": "明治 おいしい牛乳 1000ml",
-        "brand": "明治",
-        "category": "乳製品",
-        "price": 228,
-        "store": "スーパーA 広島駅前店",
-        "trust": 72,
-        "updated_at": "2025-11-05T10:12:00"
-    },
-    {
-        "product_id": 2,
-        "jan": "4902713123456",
-        "name": "日清 カップヌードル しょうゆ 78g",
-        "brand": "日清",
-        "category": "インスタント",
-        "price": 158,
-        "store": "ドラッグB 猿猴橋店",
-        "trust": 65,
-        "updated_at": "2025-11-11T18:40:00"
-    },
-    {
-        "product_id": 3,
-        "jan": "4901777301234",
-        "name": "コカ・コーラ 500ml ペット",
-        "brand": "コカ・コーラ",
-        "category": "飲料",
-        "price": 98,
-        "store": "スーパーA 広島駅前店",
-        "trust": 80,
-        "updated_at": "2025-11-06T12:00:00"
-    },
-    {
-        "product_id": 4,
-        "jan": "4901002134567",
-        "name": "キッコーマン しょうゆ 1L",
-        "brand": "キッコーマン",
-        "category": "調味料",
-        "price": 268,
-        "store": "スーパーC 段原店",
-        "trust": 55,
-        "updated_at": "2025-11-10T09:25:00"
-    },
-    {
-        "product_id": 5,
-        "jan": "4901085198765",
-        "name": "ハウス バーモントカレー 中辛 230g",
-        "brand": "ハウス",
-        "category": "レトルト",
-        "price": 198,
-        "store": "ドラッグB 猿猴橋店",
-        "trust": 60,
-        "updated_at": "2025-11-09T16:10:00"
-    },
-    {
-        "product_id": 6,
-        "jan": "4901411234001",
-        "name": "サントリー 天然水 2L",
-        "brand": "サントリー",
-        "category": "飲料",
-        "price": 95,
-        "store": "スーパーD 横川店",
-        "trust": 77,
-        "updated_at": "2025-11-12T08:00:00"
-    },
-    {
-        "product_id": 7,
-        "jan": "4903301234567",
-        "name": "ヤマザキ ダブルソフト 6枚",
-        "brand": "山崎製パン",
-        "category": "パン",
-        "price": 178,
-        "store": "スーパーC 段原店",
-        "trust": 58,
-        "updated_at": "2025-11-07T11:30:00"
-    },
-    {
-        "product_id": 8,
-        "jan": "4902720123012",
-        "name": "UCC ブラック無糖 185g 缶",
-        "brand": "UCC",
-        "category": "飲料",
-        "price": 78,
-        "store": "コンビニE 広大病院前店",
-        "trust": 68,
-        "updated_at": "2025-11-08T21:05:00"
-    },
-] """
 
 # ユーティリティ：日付→datetime
 def _parse_dt(s: str) -> datetime:
@@ -186,12 +103,7 @@ def search_products_service(
     price_min: int | None,
     price_max: int | None
 ):
-    """
-    DB（souken）の products テーブルから検索する想定。
-    - q: フリーワード / JAN
-    - sort: price_asc / recent / trust_desc （今はとりあえず名前順）
-    - price_min/max: 価格フィルタ（あとで実装）
-    """
+    
     
     q = (q or "").strip()
     sort = (sort or "price_asc").strip()
@@ -270,9 +182,72 @@ def search_products():
 def favorites_stores():
     return _placeholder("お気に入り店舗画面")
 
+# =========================
+# Google Places API（近隣店舗検索）
+# =========================
+@app.route("/api/nearby_stores", methods=["POST"])
+def api_nearby_stores():
+    data = request.get_json()
+    lat = data.get("lat")
+    lng = data.get("lng")
+
+    if lat is None or lng is None:
+        return jsonify({"error": "lat, lng が必要です"}), 400
+
+    url = "https://places.googleapis.com/v1/places:searchNearby"
+
+    headers = {
+        "Content-Type": "application/json",
+        "X-Goog-Api-Key": GOOGLE_PLACES_KEY,
+        "X-Goog-FieldMask": (
+            "places.displayName,places.formattedAddress,"
+            "places.location,places.rating"
+        ),
+    }
+
+    payload = {
+        # スーパーだけに絞る（必要に応じて追加）
+        "includedTypes": ["supermarket"],
+        "maxResultCount": 20,
+        "locationRestriction": {
+            "circle": {
+                "center": {"latitude": lat, "longitude": lng},
+                "radius": 1500  # 半径 1.5km
+            }
+        }
+    }
+
+    try:
+        resp = requests.post(url, headers=headers, json=payload, timeout=10)
+        resp.raise_for_status()
+    except requests.RequestException as e:
+        return jsonify({"error": f"Places API error: {e}"}), 500
+
+    raw = resp.json()
+    places = []
+
+    for p in raw.get("places", []):
+        loc = p.get("location", {})
+        places.append({
+            "name": p.get("displayName", {}).get("text"),
+            "address": p.get("formattedAddress"),
+            "lat": loc.get("latitude"),
+            "lng": loc.get("longitude"),
+            "rating": p.get("rating")
+        })
+
+    return jsonify({"places": places})
+
+
+# --- 近隣店舗検索　---
 @app.route("/search/stores")
 def search_stores():
-    return _placeholder("近隣店舗検索画面")
+    return render_template(
+        "search_stores.html",
+        logged_in=is_logged_in(),
+        user=session.get("user")
+    )
+
 
 @app.route("/purchases")
 def purchases():
