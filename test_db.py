@@ -1,10 +1,11 @@
-# test_db.py
-from dao.products_dao import ProductDAO
+import mysql.connector
 
-def main():
-    products = ProductDAO.search_by_keyword("牛乳")
-    for p in products:
-        print(p.id, p.jan, p.name, p.brand, p.category)
+conn = mysql.connector.connect(
+    host="10.16.73.155",      # あなたのPCのIP
+    user="appuser",
+    password="sotuken",
+    database="sotuken",
+    auth_plugin="mysql_native_password"
+)
 
-if __name__ == "__main__":
-    main()
+print("接続成功！")

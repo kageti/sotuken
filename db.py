@@ -4,11 +4,12 @@ from mysql.connector import pooling
 
 
 DB_CONFIG = {
-    "host": "localhost",
+    "host": "10.16.73.155",
     "port": 3306,
-    "user": "root",
-    "password": "password",
+    "user": "appuser",
+    "password": "sotuken",
     "database": "sotuken",
+    "auth_plugin": "mysql_native_password",
 }
 
 # コネクションプール（同時アクセスにも強くなる）
