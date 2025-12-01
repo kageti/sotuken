@@ -255,7 +255,7 @@ def purchases():
 
 @app.route("/cart")
 def cart():
-    return _placeholder("マイカート画面")
+    return _placeholder("買い物メモ画面")
 
 @app.route("/price/post")
 def price_post():
@@ -263,7 +263,7 @@ def price_post():
 
 @app.route("/mypage")
 def mypage():
-    return _placeholder("マイページ画面")
+    return _placeholder("mypage.html")
 
 def _placeholder(title: str) -> str:
     return f"""
