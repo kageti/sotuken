@@ -9,6 +9,8 @@ from werkzeug.security import check_password_hash
 import os
 import requests
 from dotenv import load_dotenv
+from dao.shopping_memo_dao import ShoppingMemoDAO
+
 
 load_dotenv()  # .env 読み込み
 GOOGLE_PLACES_KEY = os.getenv("GOOGLE_PLACES_KEY")
@@ -48,10 +50,12 @@ def login():
         user = UserDAO.find_by_email(email)
         if user and check_password_hash(user.password_hash, password):
             session["user"] = email
+            session["user_id"] = user.id  #追加
             flash("ログインしました。", "success")
             return redirect(url_for("home"))
         if email in users and users[email]["password"] == password:
             session["user"] = email
+            session["user_id"] = 0  #追加（仮ユーザー用）
             flash("ログインしました。", "success")
             return redirect(url_for("home"))
         flash("メールアドレスまたはパスワードが正しくありません。", "danger")
@@ -62,6 +66,7 @@ def login():
 @app.route("/logout")
 def logout():
     session.pop("user", None)
+    session.pop("user_id", None)  #  追加
     flash("ログアウトしました。", "info")
     return redirect(url_for("home"))
 
@@ -180,18 +185,26 @@ def search_products():
 # --- 買い物メモに追加 ---
 @app.post("/memo/add")
 def add_to_memo():
-    # セッションに memo がなければ作る
-    if "memo" not in session:
-        session["memo"] = []
+    if not is_logged_in():
+        flash("買い物メモに追加するにはログインしてください。", "warning")
+        return redirect(url_for("login"))
 
     product_id = request.form.get("product_id")
-    if product_id and product_id not in session["memo"]:
-        session["memo"].append(product_id)
-        session.modified = True
-        flash("買い物メモに追加しました。", "success")
+    try:
+        product_id_i = int(product_id)
+    except (TypeError, ValueError):
+        flash("不正な商品です。", "danger")
+        return redirect(request.referrer or url_for("search_products"))
 
-    # 元のページ（検索結果）に戻る
-    return redirect(request.referrer or url_for("search_products")) 
+    user_id = session.get("user_id")
+    if user_id is None:
+        flash("ユーザー情報が取得できませんでした。", "danger")
+        return redirect(url_for("login"))
+
+    ShoppingMemoDAO.add(user_id, product_id_i)
+    flash("買い物メモに追加しました。", "success")
+
+    return redirect(request.referrer or url_for("search_products"))
 
 # --- 近隣店舗などプレースホルダー ---
 @app.route("/favorites/stores")
