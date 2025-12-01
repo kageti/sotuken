@@ -177,6 +177,22 @@ def search_products():
         user=session.get("user")
     )
 
+# --- 買い物メモに追加 ---
+@app.post("/memo/add")
+def add_to_memo():
+    # セッションに memo がなければ作る
+    if "memo" not in session:
+        session["memo"] = []
+
+    product_id = request.form.get("product_id")
+    if product_id and product_id not in session["memo"]:
+        session["memo"].append(product_id)
+        session.modified = True
+        flash("買い物メモに追加しました。", "success")
+
+    # 元のページ（検索結果）に戻る
+    return redirect(request.referrer or url_for("search_products")) 
+
 # --- 近隣店舗などプレースホルダー ---
 @app.route("/favorites/stores")
 def favorites_stores():
