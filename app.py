@@ -22,6 +22,26 @@ users = {
     "test@example.com": {"password": "pass"},
 }
 
+# --- 仮 価格投稿ストア（DBなしで動かす用） ---
+MOCK_PRICE_POSTS = []  # 将来は DB（product_prices テーブル）に差し替え予定
+
+
+def add_mock_price_post(jan, product_name, store_name, price, user_email):
+    """
+    将来的に DAO を呼ぶ形に差し替えるためのラッパ関数。
+    今はメモリ上のリストに追加するだけ。
+    """
+    post = {
+        "id": len(MOCK_PRICE_POSTS) + 1,
+        "jan": jan,
+        "product_name": product_name,
+        "store_name": store_name,
+        "price": price,
+        "user_email": user_email,
+        "posted_at": datetime.now().isoformat(timespec="seconds"),
+    }
+    MOCK_PRICE_POSTS.append(post)
+    return post["id"]
 
 # ユーティリティ：日付→datetime
 def _parse_dt(s: str) -> datetime:
@@ -187,12 +207,15 @@ def favorites_stores():
 # =========================
 @app.route("/api/nearby_stores", methods=["POST"])
 def api_nearby_stores():
-    data = request.get_json()
+    data = request.get_json() or {}
     lat = data.get("lat")
     lng = data.get("lng")
 
     if lat is None or lng is None:
         return jsonify({"error": "lat, lng が必要です"}), 400
+
+    if not GOOGLE_PLACES_KEY:
+        return jsonify({"error": "GOOGLE_PLACES_KEY が設定されていません。.env を確認してください。"}), 500
 
     url = "https://places.googleapis.com/v1/places:searchNearby"
 
@@ -200,23 +223,23 @@ def api_nearby_stores():
         "Content-Type": "application/json",
         "X-Goog-Api-Key": GOOGLE_PLACES_KEY,
         "X-Goog-FieldMask": (
-            "places.displayName,places.formattedAddress,"
+            "places.id,places.displayName,places.formattedAddress,"
             "places.location,places.rating"
         ),
     }
 
     payload = {
-        # スーパーだけに絞る（必要に応じて追加）
-        "includedTypes": ["supermarket"],
+        "includedTypes": ["supermarket"],  # スーパーに絞る
         "maxResultCount": 20,
         "locationRestriction": {
             "circle": {
                 "center": {"latitude": lat, "longitude": lng},
-                "radius": 1500  # 半径 1.5km
+                "radius": 1500,
             }
-        }
+        },
     }
 
+    # ★ ここから下がさっきの try ブロック
     try:
         resp = requests.post(url, headers=headers, json=payload, timeout=10)
         resp.raise_for_status()
@@ -229,14 +252,16 @@ def api_nearby_stores():
     for p in raw.get("places", []):
         loc = p.get("location", {})
         places.append({
+            "place_id": p.get("id"),
             "name": p.get("displayName", {}).get("text"),
             "address": p.get("formattedAddress"),
             "lat": loc.get("latitude"),
             "lng": loc.get("longitude"),
-            "rating": p.get("rating")
+            "rating": p.get("rating"),
         })
 
     return jsonify({"places": places})
+
 
 
 # --- 近隣店舗検索　---
@@ -257,9 +282,62 @@ def purchases():
 def cart():
     return _placeholder("マイカート画面")
 
-@app.route("/price/post")
+# =========================
+# 商品価格投稿画面（DBなし版）
+# =========================
+@app.route("/price/post", methods=["GET", "POST"])
 def price_post():
-    return _placeholder("価格情報提供（投稿）画面")
+    if not is_logged_in():
+        flash("価格を投稿するにはログインが必要です。", "warning")
+        return redirect(url_for("login"))
+
+    # --- GET: フォーム表示 ---
+    if request.method == "GET":
+        # 近隣店舗検索画面などから store_name をクエリで渡せるようにする想定
+        prefill_store_name = request.args.get("store_name", "") or ""
+        return render_template(
+            "price_post.html",
+            logged_in=is_logged_in(),
+            user=session.get("user"),
+            store_name=prefill_store_name,
+            recent_posts=MOCK_PRICE_POSTS[-5:],  # 直近5件だけ下に表示（任意）
+        )
+
+    # --- POST: 入力内容を検証して、メモリ上に保存 ---
+    jan = (request.form.get("jan") or "").strip()
+    product_name = (request.form.get("product_name") or "").strip()
+    store_name = (request.form.get("store_name") or "").strip()
+    price_str = (request.form.get("price") or "").strip()
+
+    # 必須チェック
+    if not store_name:
+        flash("店舗名を入力してください。", "warning")
+        return redirect(url_for("price_post"))
+
+    if not jan and not product_name:
+        flash("JANコードか商品名のどちらかは必須です。", "warning")
+        return redirect(url_for("price_post"))
+
+    if not price_str.isdigit():
+        flash("価格は整数で入力してください。", "warning")
+        return redirect(url_for("price_post"))
+
+    price = int(price_str)
+    user_email = session.get("user")
+
+    # 将来 DB に差し替える箇所
+    add_mock_price_post(
+        jan=jan or None,
+        product_name=product_name or "(名称未設定)",
+        store_name=store_name,
+        price=price,
+        user_email=user_email,
+    )
+
+    flash("価格情報を投稿しました。（現在はアプリ内の一時保存です）", "success")
+    # ひとまず同じ画面に戻す
+    return redirect(url_for("price_post"))
+
 
 @app.route("/mypage")
 def mypage():

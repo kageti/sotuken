@@ -101,16 +101,19 @@
           </a>
         </div>
 
-        <div class="col-12 col-sm-6 col-lg-4">
-          <a href="/price/post" class="text-decoration-none text-body">
-            <div class="card feature-card shadow-sm h-100">
-              <div class="card-body">
-                <h2 class="h5">価格情報提供</h2>
-                <p class="text-muted mb-2">レシート画像と店舗選択で価格を投稿。信頼値に反映。</p>
-                <span class="btn btn-outline-secondary btn-sm">投稿する</span>
-              </div>
+        <div class="col-md-6">
+          <div class="card shadow-sm h-100">
+            <div class="card-body">
+              <h5 class="card-title">商品情報提供</h5>
+              <p class="card-text text-muted small">
+                お店で見つけた商品の価格を投稿して、みんなの買い物を助けることができます。
+              </p>
+              <!-- ★ ここをクリックすると価格登録画面へ -->
+              <a class="btn btn-primary btn-sm" href="{{ url_for('price_post') }}">
+                価格を投稿する
+              </a>
             </div>
-          </a>
+          </div>
         </div>
 
         <div class="col-12 col-sm-6 col-lg-4">
