@@ -239,15 +239,15 @@ def search_products():
         user=session.get("user")
     )
 
-# --- 買い物メモに追加 ---
+# --- 買い物メモ（追加 or 削除） ---
 @app.route("/memo/add", methods=["POST"])
 def add_to_memo():
-    # --- 未ログインならログインへ ---
+    # 未ログインなら静かにログインへ
     if not is_logged_in():
-        flash("買い物メモを使うにはログインしてください。", "warning")
         return redirect(url_for("login"))
 
-    # --- ログインユーザー情報 ---
+    # ラジオボタンの値: "add" or "remove"
+    action = request.form.get("action")
     product_id_raw = request.form.get("product_id")
 
     try:
@@ -256,26 +256,36 @@ def add_to_memo():
         flash("不正な商品です。", "danger")
         return redirect(request.referrer or url_for("search_products"))
 
-    user_email = session.get("user")
-    user_id = session.get("user_id")   # ★これを追加！
-    print("DEBUG user_id from session:", user_id)
-
+    user_id = session.get("user_id")
     if not user_id:
-        flash("ユーザー情報が取得できませんでした。", "danger")
         return redirect(url_for("login"))
 
-    # --- DBに追加（user_id + product_id） ---
-    sql = """
-        INSERT IGNORE INTO shopping_memos (user_id, product_id)
-        VALUES (%s, %s)
-    """
+    # --- DB処理 ---
+    if action == "add":
+        sql = """
+            INSERT IGNORE INTO shopping_memos (user_id, product_id)
+            VALUES (%s, %s)
+        """
+        msg = "買い物メモに追加しました。"
+    elif action == "remove":
+        sql = """
+            DELETE FROM shopping_memos
+            WHERE user_id = %s AND product_id = %s
+        """
+        msg = "買い物メモから削除しました。"
+    else:
+        flash("不正な操作です。", "danger")
+        return redirect(request.referrer or url_for("search_products"))
+
+    from db import get_connection
     with get_connection() as conn:
         with conn.cursor() as cur:
             cur.execute(sql, (user_id, product_id))
         conn.commit()
 
-    flash("買い物メモに追加しました。", "success")
+    flash(msg, "success")
     return redirect(request.referrer or url_for("search_products"))
+
 
 
 
