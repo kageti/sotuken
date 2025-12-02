@@ -10,6 +10,8 @@ import os
 import requests
 from dotenv import load_dotenv
 from dao.shopping_memo_dao import ShoppingMemoDAO
+from db import get_connection
+
 
 
 load_dotenv()  # .env 読み込み
@@ -44,23 +46,26 @@ def home():
 # --- ログイン ---
 @app.route("/login", methods=["GET", "POST"])
 def login():
+    # ★ すでにログインしている人はログイン画面に行けない
+    if is_logged_in():
+        return redirect(url_for("home"))
+
     if request.method == "POST":
         email = (request.form.get("email") or "").strip()
         password = request.form.get("password") or ""
         user = UserDAO.find_by_email(email)
+
         if user and check_password_hash(user.password_hash, password):
             session["user"] = email
-            session["user_id"] = user.id  #追加
+            session["user_id"] = user.user_id
             flash("ログインしました。", "success")
             return redirect(url_for("home"))
-        if email in users and users[email]["password"] == password:
-            session["user"] = email
-            session["user_id"] = 0  #追加（仮ユーザー用）
-            flash("ログインしました。", "success")
-            return redirect(url_for("home"))
+
         flash("メールアドレスまたはパスワードが正しくありません。", "danger")
         return redirect(url_for("login"))
+
     return render_template("login.html")
+
 
 # --- ログアウト ---
 @app.route("/logout")
@@ -183,28 +188,44 @@ def search_products():
     )
 
 # --- 買い物メモに追加 ---
-@app.post("/memo/add")
+@app.route("/memo/add", methods=["POST"])
 def add_to_memo():
+    # --- 未ログインならログインへ ---
     if not is_logged_in():
-        flash("買い物メモに追加するにはログインしてください。", "warning")
+        flash("買い物メモを使うにはログインしてください。", "warning")
         return redirect(url_for("login"))
 
-    product_id = request.form.get("product_id")
+    # --- ログインユーザー情報 ---
+    product_id_raw = request.form.get("product_id")
+
     try:
-        product_id_i = int(product_id)
+        product_id = int(product_id_raw)
     except (TypeError, ValueError):
         flash("不正な商品です。", "danger")
         return redirect(request.referrer or url_for("search_products"))
 
-    user_id = session.get("user_id")
-    if user_id is None:
+    user_email = session.get("user")
+    user_id = session.get("user_id")   # ★これを追加！
+    print("DEBUG user_id from session:", user_id)
+
+    if not user_id:
         flash("ユーザー情報が取得できませんでした。", "danger")
         return redirect(url_for("login"))
 
-    ShoppingMemoDAO.add(user_id, product_id_i)
-    flash("買い物メモに追加しました。", "success")
+    # --- DBに追加（user_id + product_id） ---
+    sql = """
+        INSERT IGNORE INTO shopping_memos (user_id, product_id)
+        VALUES (%s, %s)
+    """
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql, (user_id, product_id))
+        conn.commit()
 
+    flash("買い物メモに追加しました。", "success")
     return redirect(request.referrer or url_for("search_products"))
+
+
 
 # --- 近隣店舗などプレースホルダー ---
 @app.route("/favorites/stores")
