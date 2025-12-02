@@ -172,6 +172,33 @@ def search_products():
 
     results = search_products_service(q, sort, price_min_i, price_max_i)
 
+ # ★ ここから追加：ログイン中ユーザーの「メモ済み product_id 一覧」を取る
+    memo_product_ids = set()
+    if is_logged_in():
+        user_id = session.get("user")
+        if user_id:
+            sql = "SELECT product_id FROM shopping_memos WHERE user_id = %s"
+            with get_connection() as conn:
+                with conn.cursor() as cur:
+                    cur.execute(sql, (user_id,))
+                    for (pid,) in cur.fetchall():
+                        memo_product_ids.add(pid)
+
+    store_names = []
+
+    return render_template(
+        "search_products.html",
+        q=q,
+        sort=sort,
+        price_min=price_min or "",
+        price_max=price_max or "",
+        results=results,
+        store_names=store_names,
+        logged_in=is_logged_in(),
+        user=session.get("user"),
+        memo_product_ids=memo_product_ids,  # ★ これをテンプレに渡す
+    )
+
     # ストア一覧（フィルタUIの将来拡張用）
     store_names = []
 
