@@ -21,15 +21,29 @@
   </style>
 </head>
 <body class="bg-light">
+
+  <!-- 🔵 ← このヘッダー部分だけ改造した！ -->
   <header class="py-3 border-bottom bg-white">
     <div class="container d-flex justify-content-between align-items-center">
+
       <div class="app-logo h4 m-0">価格比較アプリ</div>
+
       <nav class="d-flex gap-2">
-        <a class="btn btn-outline-primary btn-sm" href="/login">ログイン</a>
-        <a class="btn btn-primary btn-sm" href="/register">新規会員登録</a>
+        {% if logged_in %}
+          <!-- ログイン中はこっち -->
+          <span class="text-muted small align-self-center">{{ user }} さん</span>
+          <a class="btn btn-outline-primary btn-sm" href="/mypage">マイページ</a>
+          <a class="btn btn-outline-danger btn-sm" href="/logout">ログアウト</a>
+        {% else %}
+          <!-- ログイン前は今まで通り -->
+          <a class="btn btn-outline-primary btn-sm" href="/login">ログイン</a>
+          <a class="btn btn-primary btn-sm" href="/register">新規会員登録</a>
+        {% endif %}
       </nav>
+
     </div>
   </header>
+  <!-- 🔵 ここまでが変更点 -->
 
   <main class="container my-4">
     <!-- Hero -->
@@ -93,7 +107,7 @@
           <a href="/cart" class="text-decoration-none text-body">
             <div class="card feature-card shadow-sm h-100">
               <div class="card-body">
-                <h2 class="h5">マイカート</h2>
+                <h2 class="h5">買い物メモ</h2>
                 <p class="text-muted mb-2">カート内の商品を管理。最安店舗の組み合わせ検討に。</p>
                 <span class="btn btn-outline-secondary btn-sm">開く</span>
               </div>
@@ -143,10 +157,4 @@
     </section>
   </main>
 
-  <footer class="py-4 text-center text-muted">
-    <small>&copy; 2025 価格比較アプリ</small>
-  </footer>
-
-  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-</body>
-</html>
+  <footer class="py-4 text-center text-muted

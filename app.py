@@ -9,6 +9,10 @@ from werkzeug.security import check_password_hash
 import os
 import requests
 from dotenv import load_dotenv
+from dao.shopping_memo_dao import ShoppingMemoDAO
+from db import get_connection
+
+
 
 load_dotenv()  # .env 読み込み
 GOOGLE_PLACES_KEY = os.getenv("GOOGLE_PLACES_KEY")
@@ -62,26 +66,32 @@ def home():
 # --- ログイン ---
 @app.route("/login", methods=["GET", "POST"])
 def login():
+    # ★ すでにログインしている人はログイン画面に行けない
+    if is_logged_in():
+        return redirect(url_for("home"))
+
     if request.method == "POST":
         email = (request.form.get("email") or "").strip()
         password = request.form.get("password") or ""
         user = UserDAO.find_by_email(email)
+
         if user and check_password_hash(user.password_hash, password):
             session["user"] = email
+            session["user_id"] = user.user_id
             flash("ログインしました。", "success")
             return redirect(url_for("home"))
-        if email in users and users[email]["password"] == password:
-            session["user"] = email
-            flash("ログインしました。", "success")
-            return redirect(url_for("home"))
+
         flash("メールアドレスまたはパスワードが正しくありません。", "danger")
         return redirect(url_for("login"))
+
     return render_template("login.html")
+
 
 # --- ログアウト ---
 @app.route("/logout")
 def logout():
     session.pop("user", None)
+    session.pop("user_id", None)  #  追加
     flash("ログアウトしました。", "info")
     return redirect(url_for("home"))
 
@@ -182,6 +192,33 @@ def search_products():
 
     results = search_products_service(q, sort, price_min_i, price_max_i)
 
+ # ★ ここから追加：ログイン中ユーザーの「メモ済み product_id 一覧」を取る
+    memo_product_ids = set()
+    if is_logged_in():
+        user_id = session.get("user")
+        if user_id:
+            sql = "SELECT product_id FROM shopping_memos WHERE user_id = %s"
+            with get_connection() as conn:
+                with conn.cursor() as cur:
+                    cur.execute(sql, (user_id,))
+                    for (pid,) in cur.fetchall():
+                        memo_product_ids.add(pid)
+
+    store_names = []
+
+    return render_template(
+        "search_products.html",
+        q=q,
+        sort=sort,
+        price_min=price_min or "",
+        price_max=price_max or "",
+        results=results,
+        store_names=store_names,
+        logged_in=is_logged_in(),
+        user=session.get("user"),
+        memo_product_ids=memo_product_ids,  # ★ これをテンプレに渡す
+    )
+
     # ストア一覧（フィルタUIの将来拡張用）
     store_names = []
 
@@ -196,6 +233,46 @@ def search_products():
         logged_in=is_logged_in(),
         user=session.get("user")
     )
+
+# --- 買い物メモに追加 ---
+@app.route("/memo/add", methods=["POST"])
+def add_to_memo():
+    # --- 未ログインならログインへ ---
+    if not is_logged_in():
+        flash("買い物メモを使うにはログインしてください。", "warning")
+        return redirect(url_for("login"))
+
+    # --- ログインユーザー情報 ---
+    product_id_raw = request.form.get("product_id")
+
+    try:
+        product_id = int(product_id_raw)
+    except (TypeError, ValueError):
+        flash("不正な商品です。", "danger")
+        return redirect(request.referrer or url_for("search_products"))
+
+    user_email = session.get("user")
+    user_id = session.get("user_id")   # ★これを追加！
+    print("DEBUG user_id from session:", user_id)
+
+    if not user_id:
+        flash("ユーザー情報が取得できませんでした。", "danger")
+        return redirect(url_for("login"))
+
+    # --- DBに追加（user_id + product_id） ---
+    sql = """
+        INSERT IGNORE INTO shopping_memos (user_id, product_id)
+        VALUES (%s, %s)
+    """
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql, (user_id, product_id))
+        conn.commit()
+
+    flash("買い物メモに追加しました。", "success")
+    return redirect(request.referrer or url_for("search_products"))
+
+
 
 # --- 近隣店舗などプレースホルダー ---
 @app.route("/favorites/stores")
@@ -280,7 +357,7 @@ def purchases():
 
 @app.route("/cart")
 def cart():
-    return _placeholder("マイカート画面")
+    return _placeholder("買い物メモ画面")
 
 # =========================
 # 商品価格投稿画面（DBなし版）
@@ -341,7 +418,7 @@ def price_post():
 
 @app.route("/mypage")
 def mypage():
-    return _placeholder("マイページ画面")
+    return _placeholder("mypage.html")
 
 def _placeholder(title: str) -> str:
     return f"""
