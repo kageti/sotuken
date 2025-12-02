@@ -11,6 +11,7 @@ import requests
 from dotenv import load_dotenv
 from dao.shopping_memo_dao import ShoppingMemoDAO
 from db import get_connection
+from flask import get_flashed_messages
 
 
 
@@ -56,7 +57,7 @@ def _parse_dt(s: str) -> datetime:
 
 # --- 認証ヘルパ ---
 def is_logged_in():
-    return "user" in session
+    return "user_id" in session
 
 # --- Home ---
 @app.route("/")
@@ -66,7 +67,10 @@ def home():
 # --- ログイン ---
 @app.route("/login", methods=["GET", "POST"])
 def login():
-    # ★ すでにログインしている人はログイン画面に行けない
+    # ★ ログイン画面に来た時点でフラッシュ全部破棄
+    get_flashed_messages()
+
+    # ★ すでにログイン済みならホームへ追い返す
     if is_logged_in():
         return redirect(url_for("home"))
 
@@ -77,10 +81,11 @@ def login():
 
         if user and check_password_hash(user.password_hash, password):
             session["user"] = email
-            session["user_id"] = user.user_id
-            flash("ログインしました。", "success")
+            session["user_id"] = user.id
+            # ★ ログイン成功時もメッセージ出さない
             return redirect(url_for("home"))
 
+        # ★ このメッセージだけ残す（間違えたとき）
         flash("メールアドレスまたはパスワードが正しくありません。", "danger")
         return redirect(url_for("login"))
 
@@ -418,7 +423,16 @@ def price_post():
 
 @app.route("/mypage")
 def mypage():
-    return _placeholder("mypage.html")
+    if not is_logged_in():
+        return redirect(url_for("login"))
+
+    return render_template(
+        "mypage.html",
+        user=session.get("user"),
+        logged_in=True,
+        user_rating=4.2  # ← DB接続前の仮データ
+    )
+
 
 def _placeholder(title: str) -> str:
     return f"""
