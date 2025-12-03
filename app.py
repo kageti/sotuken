@@ -297,6 +297,7 @@ def add_to_memo():
             VALUES (%s, %s)
         """
         msg = "買い物メモに追加しました。"
+        print("買い物メモに追加しました。")
     elif action == "remove":
         sql = """
             DELETE FROM shopping_memos
