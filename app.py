@@ -67,10 +67,7 @@ def home():
 # --- ログイン ---
 @app.route("/login", methods=["GET", "POST"])
 def login():
-    # ★ ログイン画面に来た時点でフラッシュ全部破棄
-    get_flashed_messages()
-
-    # ★ すでにログイン済みならホームへ追い返す
+    # すでにログイン済ならホームへ
     if is_logged_in():
         return redirect(url_for("home"))
 
@@ -80,16 +77,17 @@ def login():
         user = UserDAO.find_by_email(email)
 
         if user and check_password_hash(user.password_hash, password):
+            # ここ大事：メールアドレスと user_id をセッションに保存
             session["user"] = email
-            session["user_id"] = user.id
-            # ★ ログイン成功時もメッセージ出さない
+            session["user_id"] = user.user_id   # ← UserDAO のプロパティ名に合わせる
+            flash("ログインしました。", "success")
             return redirect(url_for("home"))
 
-        # ★ このメッセージだけ残す（間違えたとき）
         flash("メールアドレスまたはパスワードが正しくありません。", "danger")
         return redirect(url_for("login"))
 
     return render_template("login.html")
+
 
 
 # --- ログアウト ---
@@ -179,6 +177,8 @@ def search_products_service(
     # ひとまず price_min / price_max は未使用（あとで拡張）
     return products
 
+from db import get_connection  # ここはファイル先頭付近にある想定
+
 @app.route("/search/products")
 def search_products():
     q = request.args.get("q", "")
@@ -197,10 +197,10 @@ def search_products():
 
     results = search_products_service(q, sort, price_min_i, price_max_i)
 
- # ★ ここから追加：ログイン中ユーザーの「メモ済み product_id 一覧」を取る
-    memo_product_ids = set()
+    # ★ ログイン中ユーザーの「買い物メモ済み product_id 一覧」
+    memo_product_ids: set[int] = set()
     if is_logged_in():
-        user_id = session.get("user")
+        user_id = session.get("user_id")
         if user_id:
             sql = "SELECT product_id FROM shopping_memos WHERE user_id = %s"
             with get_connection() as conn:
@@ -208,7 +208,9 @@ def search_products():
                     cur.execute(sql, (user_id,))
                     for (pid,) in cur.fetchall():
                         memo_product_ids.add(pid)
+            print("DEBUG memo_product_ids:", memo_product_ids)
 
+    # ストア一覧（将来用のダミー）
     store_names = []
 
     return render_template(
@@ -221,32 +223,18 @@ def search_products():
         store_names=store_names,
         logged_in=is_logged_in(),
         user=session.get("user"),
-        memo_product_ids=memo_product_ids,  # ★ これをテンプレに渡す
+        memo_product_ids=memo_product_ids,  # ★ テンプレに渡す
     )
 
-    # ストア一覧（フィルタUIの将来拡張用）
-    store_names = []
 
-    return render_template(
-        "search_products.html",
-        q=q,
-        sort=sort,
-        price_min=price_min or "",
-        price_max=price_max or "",
-        results=results,
-        store_names=store_names,
-        logged_in=is_logged_in(),
-        user=session.get("user")
-    )
-
-# --- 買い物メモ（追加 or 削除） ---
 @app.route("/memo/add", methods=["POST"])
 def add_to_memo():
-    # 未ログインなら静かにログインへ
+    # 未ログインなら静かにログイン画面へ
     if not is_logged_in():
+        flash("買い物メモを使うにはログインしてください。", "warning")
         return redirect(url_for("login"))
 
-    # ラジオボタンの値: "add" or "remove"
+    # ラジオボタンの値（"add" か "remove"）
     action = request.form.get("action")
     product_id_raw = request.form.get("product_id")
 
@@ -258,7 +246,10 @@ def add_to_memo():
 
     user_id = session.get("user_id")
     if not user_id:
+        flash("ユーザー情報が取得できませんでした。", "danger")
         return redirect(url_for("login"))
+
+    print("DEBUG /memo/add action:", action, "user_id:", user_id, "product_id:", product_id)
 
     # --- DB処理 ---
     if action == "add":
@@ -267,17 +258,18 @@ def add_to_memo():
             VALUES (%s, %s)
         """
         msg = "買い物メモに追加しました。"
+
     elif action == "remove":
         sql = """
             DELETE FROM shopping_memos
             WHERE user_id = %s AND product_id = %s
         """
         msg = "買い物メモから削除しました。"
+
     else:
         flash("不正な操作です。", "danger")
         return redirect(request.referrer or url_for("search_products"))
 
-    from db import get_connection
     with get_connection() as conn:
         with conn.cursor() as cur:
             cur.execute(sql, (user_id, product_id))
@@ -285,6 +277,7 @@ def add_to_memo():
 
     flash(msg, "success")
     return redirect(request.referrer or url_for("search_products"))
+
 
 
 

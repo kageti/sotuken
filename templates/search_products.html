@@ -9,7 +9,19 @@
   <style>
     body { background: #f8f9fa; }
     .result-card:hover { transform: translateY(-2px); transition: .15s ease; }
+<<<<<<< HEAD
     .badge-jan { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
+=======
+    .badge-jan { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Courier New", monospace; }
+    
+    /* 買い物メモブロックの枠 */
+    .memo-box {
+      border: 1px solid #dee2e6;
+      border-radius: .35rem;
+      padding: .4rem .6rem .6rem;
+      background-color: #ffffff;
+    } 
+>>>>>>> 5de7b49 (買い物メモ更新)
   </style>
 </head>
 <body>
@@ -63,6 +75,10 @@
       <p class="text-muted mb-2">検索結果：<strong>{{ results|length }}</strong> 件</p>
       <div class="row g-3">
         {% for p in results %}
+<<<<<<< HEAD
+=======
+          <!-- 1列 / 2列 / 3列 レイアウト -->
+>>>>>>> 5de7b49 (買い物メモ更新)
           <div class="col-12 col-md-6 col-lg-4">
             <div class="card result-card shadow-sm h-100">
               <div class="card-body">
@@ -84,14 +100,56 @@
               <div class="card-footer bg-white d-flex gap-2">
                 <button class="btn btn-outline-primary btn-sm w-100" disabled>詳細（準備中）</button>
 
+<<<<<<< HEAD
                <form action="{{ url_for('add_to_memo') }}" method="post" class="mt-2">
                 <input type="hidden" name="product_id" value="{{ p.id }}">
                 <button class="btn btn-outline-success w-100">
                   📝 買い物メモに追加
                 </button>
               </form>
+=======
+                <!-- 買い物メモ枠 ＋ ラベル ＋ 追加/削除ボタン -->
+                <div class="memo-box mt-1">
+                  <div class="small fw-semibold mb-2">買い物メモ</div>
+>>>>>>> 5de7b49 (買い物メモ更新)
 
 
+<<<<<<< HEAD
+=======
+                    <div class="d-flex gap-2 mb-1">
+                      <!-- 追加ボタン -->
+                      <button
+                        type="submit"
+                        name="action"
+                        value="add"
+                        class="btn btn-sm w-50
+                          {% if logged_in and p.id in memo_product_ids %}
+                            btn-outline-success
+                          {% else %}
+                            btn-success
+                          {% endif %}
+                        ">
+                        追加
+                      </button>
+
+                      <!-- 削除ボタン -->
+                      <button
+                        type="submit"
+                        name="action"
+                        value="remove"
+                        class="btn btn-sm w-50
+                          {% if logged_in and p.id in memo_product_ids %}
+                            btn-danger
+                          {% else %}
+                            btn-outline-danger
+                          {% endif %}
+                        ">
+                        削除
+                      </button>
+                    </div>
+                  </form>
+                </div>
+>>>>>>> 5de7b49 (買い物メモ更新)
               </div>
             </div>
           </div>
@@ -107,5 +165,9 @@
   </footer>
 
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<<<<<<< HEAD
+=======
+  <!-- JS は不要になったので何も書かなくてOK -->
+>>>>>>> 5de7b49 (買い物メモ更新)
 </body>
 </html>
