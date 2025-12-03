@@ -103,13 +103,14 @@
                     <input type="hidden" name="product_id" value="{{ p.id }}">
 
                     <div class="d-flex gap-2 mb-1">
+
                       <!-- 追加ボタン -->
                       <button
                         type="submit"
                         name="action"
                         value="add"
                         class="btn btn-sm w-50
-                          {% if logged_in and p.id in memo_product_ids %}
+                          {% if p.id in memo_product_ids %}
                             btn-outline-success
                           {% else %}
                             btn-success
@@ -124,7 +125,7 @@
                         name="action"
                         value="remove"
                         class="btn btn-sm w-50
-                          {% if logged_in and p.id in memo_product_ids %}
+                          {% if p.id in memo_product_ids %}
                             btn-danger
                           {% else %}
                             btn-outline-danger
@@ -132,9 +133,11 @@
                         ">
                         削除
                       </button>
+
                     </div>
                   </form>
                 </div>
+
               </div>
 
             </div> <!-- card -->

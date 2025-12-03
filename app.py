@@ -227,6 +227,7 @@ def search_products():
 
 
 # --- 買い物メモ 追加・削除 ---
+# --- 買い物メモ 追加・削除 ---
 @app.route("/memo/add", methods=["POST"])
 def add_to_memo():
     # 未ログインならログインへ
@@ -240,15 +241,18 @@ def add_to_memo():
     try:
         product_id = int(product_id_raw)
     except (TypeError, ValueError):
+        print("DEBUG /memo/add: invalid product_id_raw =", product_id_raw)
         flash("不正な商品です。", "danger")
         return redirect(request.referrer or url_for("search_products"))
 
     user_id = session.get("user_id")
     if user_id is None:
+        print("DEBUG /memo/add: session user_id is None")
         flash("ユーザー情報が取得できませんでした。", "danger")
         return redirect(url_for("login"))
 
-    print("DEBUG /memo/add:", action, "user_id:", user_id, "product_id:", product_id)
+    print("DEBUG /memo/add START:",
+          "action=", action, "user_id=", user_id, "product_id=", product_id)
 
     if action == "add":
         sql = """
@@ -263,13 +267,32 @@ def add_to_memo():
         """
         msg = "買い物メモから削除しました。"
     else:
+        print("DEBUG /memo/add: unknown action =", action)
         flash("不正な操作です。", "danger")
         return redirect(request.referrer or url_for("search_products"))
 
-    with get_connection() as conn:
-        with conn.cursor() as cur:
-            cur.execute(sql, (user_id, product_id))
-        conn.commit()
+    try:
+        with get_connection() as conn:
+            # どのDBにつながっているか確認
+            try:
+                with conn.cursor() as cur:
+                    cur.execute("SELECT DATABASE()")
+                    (dbname,) = cur.fetchone()
+                    print("DEBUG /memo/add: DATABASE() =", dbname)
+            except Exception as e:
+                print("DEBUG /memo/add: failed to get DATABASE():", e)
+
+            with conn.cursor() as cur:
+                cur.execute(sql, (user_id, product_id))
+                print("DEBUG /memo/add: executed SQL, rowcount =", cur.rowcount)
+            conn.commit()
+            print("DEBUG /memo/add: COMMIT OK")
+
+    except Exception as e:
+        # ここに来たら SQL か接続でエラーが出ている
+        print("ERROR /memo/add: DB error:", repr(e))
+        flash("データベース処理でエラーが発生しました。", "danger")
+        return redirect(request.referrer or url_for("search_products"))
 
     flash(msg, "success")
     return redirect(request.referrer or url_for("search_products"))
