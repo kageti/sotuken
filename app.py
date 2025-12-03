@@ -1,86 +1,93 @@
 import os
+from datetime import datetime
+
 import requests
 from dotenv import load_dotenv
-from flask import Flask, render_template, request, redirect, url_for, flash, session, jsonify
-from datetime import datetime
+from flask import (
+    Flask,
+    render_template,
+    request,
+    redirect,
+    url_for,
+    flash,
+    session,
+    jsonify,
+)
+from werkzeug.security import check_password_hash
+
 from dao.products_dao import ProductDAO
 from dao.users_dao import UserDAO, UserAlreadyExists
-from werkzeug.security import check_password_hash
-import os
-import requests
-from dotenv import load_dotenv
-from dao.shopping_memo_dao import ShoppingMemoDAO
-from db import get_connection
-from flask import get_flashed_messages
+from db import get_connection  # ← 自作の db.py から接続関数をインポート
 
-
-
+# ------------------------------
+# 初期化
+# ------------------------------
 load_dotenv()  # .env 読み込み
 GOOGLE_PLACES_KEY = os.getenv("GOOGLE_PLACES_KEY")
 
 app = Flask(__name__)
 app.config["SECRET_KEY"] = "change-me"  # 本番は環境変数へ
 
-# --- 仮ユーザーストア（DBなしで動かす用） ---
+# --- テスト用ユーザ（DBなしで動かしたいとき用・不要なら消してOK） ---
 users = {
-    "test": {"password": "pass"},
     "test@example.com": {"password": "pass"},
+    "test": {"password": "pass"},
 }
 
-# --- 仮 価格投稿ストア（DBなしで動かす用） ---
-MOCK_PRICE_POSTS = []  # 将来は DB（product_prices テーブル）に差し替え予定
 
-
-def add_mock_price_post(jan, product_name, store_name, price, user_email):
-    """
-    将来的に DAO を呼ぶ形に差し替えるためのラッパ関数。
-    今はメモリ上のリストに追加するだけ。
-    """
-    post = {
-        "id": len(MOCK_PRICE_POSTS) + 1,
-        "jan": jan,
-        "product_name": product_name,
-        "store_name": store_name,
-        "price": price,
-        "user_email": user_email,
-        "posted_at": datetime.now().isoformat(timespec="seconds"),
-    }
-    MOCK_PRICE_POSTS.append(post)
-    return post["id"]
-
-# ユーティリティ：日付→datetime
+# ------------------------------
+# ヘルパ
+# ------------------------------
 def _parse_dt(s: str) -> datetime:
     try:
         return datetime.fromisoformat(s)
     except Exception:
         return datetime.min
 
-# --- 認証ヘルパ ---
-def is_logged_in():
-    return "user_id" in session
 
-# --- Home ---
+def is_logged_in() -> bool:
+    return "user" in session
+
+
+# ------------------------------
+# ルート
+# ------------------------------
 @app.route("/")
 def home():
-    return render_template("index.html", logged_in=is_logged_in(), user=session.get("user"))
+    return render_template(
+        "index.html",
+        logged_in=is_logged_in(),
+        user=session.get("user"),
+    )
+
 
 # --- ログイン ---
 @app.route("/login", methods=["GET", "POST"])
 def login():
-    # すでにログイン済ならホームへ
+    # すでにログイン済みならホームへ
     if is_logged_in():
         return redirect(url_for("home"))
 
     if request.method == "POST":
         email = (request.form.get("email") or "").strip()
         password = request.form.get("password") or ""
+
         user = UserDAO.find_by_email(email)
 
+        # ★ DAO 側のプロパティ名に合わせて id / user_id を調整してね
         if user and check_password_hash(user.password_hash, password):
-            # ここ大事：メールアドレスと user_id をセッションに保存
             session["user"] = email
-            session["user_id"] = user.user_id   # ← UserDAO のプロパティ名に合わせる
-            flash("ログインしました。", "success")
+            session["user_id"] = getattr(user, "id", getattr(user, "user_id", None))
+            if session["user_id"] is None:
+                # 念のためフォールバック（なければログインさせない）
+                flash("ユーザーIDが取得できませんでした。", "danger")
+                return redirect(url_for("login"))
+            return redirect(url_for("home"))
+
+        # テスト用ユーザ（必要なければ消してOK）
+        if email in users and users[email]["password"] == password:
+            session["user"] = email
+            session["user_id"] = 0  # ダミー
             return redirect(url_for("home"))
 
         flash("メールアドレスまたはパスワードが正しくありません。", "danger")
@@ -89,14 +96,14 @@ def login():
     return render_template("login.html")
 
 
-
 # --- ログアウト ---
 @app.route("/logout")
 def logout():
     session.pop("user", None)
-    session.pop("user_id", None)  #  追加
-    flash("ログアウトしました。", "info")
+    session.pop("user_id", None)
+    # 成功メッセージはいらないと言っていたので flash は出さない
     return redirect(url_for("home"))
+
 
 # --- 新規会員登録 ---
 @app.route("/register", methods=["GET", "POST"])
@@ -105,6 +112,7 @@ def register():
         email = (request.form.get("email") or "").strip()
         password = request.form.get("password") or ""
         confirm = request.form.get("confirm") or ""
+
         if not email or "@" not in email:
             flash("正しいメールアドレスを入力してください。", "warning")
             return redirect(url_for("register"))
@@ -114,70 +122,62 @@ def register():
         if password != confirm:
             flash("確認用パスワードが一致しません。", "warning")
             return redirect(url_for("register"))
+
         if UserDAO.find_by_email(email) or email in users:
             flash("このメールアドレスはすでに登録されています。", "danger")
             return redirect(url_for("register"))
+
         try:
             UserDAO.create_user(email, password)
         except UserAlreadyExists:
             flash("このメールアドレスはすでに登録されています。", "danger")
             return redirect(url_for("register"))
+
         flash("登録が完了しました。ログインしてください。", "success")
         return redirect(url_for("login"))
+
     return render_template("register.html")
 
 
-# =========================
-# 商品検索（仮データ版）
-# =========================
+# ------------------------------
+# 商品検索まわり
+# ------------------------------
 def search_products_service(
     q: str | None,
     sort: str | None,
     price_min: int | None,
-    price_max: int | None
+    price_max: int | None,
 ):
-    
-    
+    """
+    ProductDAO を呼び出して検索結果一覧をつくるサービス関数
+    """
     q = (q or "").strip()
     sort = (sort or "price_asc").strip()
-
-    def match(product):
-        # JAN 完全一致 or 前方一致
-        if q and q.isdigit():
-            if product["jan"].startswith(q):
-                return True
-        # テキスト部分一致（name, brand, category, store）
-        if q:
-            key = f"{product['name']} {product['brand']} {product['category']} {product['store']} {product['jan']}".lower()
-            if q.lower() not in key:
-                return False
-        # 価格フィルタ
-        if price_min is not None and product["price"] < price_min:
-            return False
-        if price_max is not None and product["price"] > price_max:
-            return False
-        return True
 
     if q:
         products = ProductDAO.search_by_keyword(q)
     else:
         products = []
 
-    # まだ price, trust, updated_at などを DB 側で持っていない前提で、
-    # いったんソートは「商品名」でごまかしておく
+    # ソート（DB側に任せているならここは簡易）
     if sort == "price_asc":
-        products.sort(key=lambda p: getattr(p, "name", ""))
+        products.sort(key=lambda p: getattr(p, "price", 0))
     elif sort == "recent":
-        # updated_at カラムを Product に持たせたらここで使う
-        products.sort(key=lambda p: getattr(p, "id", 0), reverse=True)
+        products.sort(
+            key=lambda p: _parse_dt(getattr(p, "updated_at", "1970-01-01T00:00:00")),
+            reverse=True,
+        )
     elif sort == "trust_desc":
-        # trust カラムを持たせたらここで使う
-        products.sort(key=lambda p: getattr(p, "id", 0), reverse=True)
+        products.sort(key=lambda p: getattr(p, "trust", 0), reverse=True)
 
-    # ひとまず price_min / price_max は未使用（あとで拡張）
+    # 価格フィルタ（必要なら）
+    if price_min is not None:
+        products = [p for p in products if getattr(p, "price", 0) >= price_min]
+    if price_max is not None:
+        products = [p for p in products if getattr(p, "price", 0) <= price_max]
+
     return products
 
-from db import get_connection  # ここはファイル先頭付近にある想定
 
 @app.route("/search/products")
 def search_products():
@@ -197,11 +197,11 @@ def search_products():
 
     results = search_products_service(q, sort, price_min_i, price_max_i)
 
-    # ★ ログイン中ユーザーの「買い物メモ済み product_id 一覧」
+    # ★ ログイン中ユーザーの「買い物メモに入っている product_id 一覧」
     memo_product_ids: set[int] = set()
     if is_logged_in():
         user_id = session.get("user_id")
-        if user_id:
+        if user_id is not None:
             sql = "SELECT product_id FROM shopping_memos WHERE user_id = %s"
             with get_connection() as conn:
                 with conn.cursor() as cur:
@@ -210,8 +210,7 @@ def search_products():
                         memo_product_ids.add(pid)
             print("DEBUG memo_product_ids:", memo_product_ids)
 
-    # ストア一覧（将来用のダミー）
-    store_names = []
+    store_names: list[str] = []  # 将来のフィルタ用
 
     return render_template(
         "search_products.html",
@@ -223,19 +222,19 @@ def search_products():
         store_names=store_names,
         logged_in=is_logged_in(),
         user=session.get("user"),
-        memo_product_ids=memo_product_ids,  # ★ テンプレに渡す
+        memo_product_ids=memo_product_ids,
     )
 
 
+# --- 買い物メモ 追加・削除 ---
 @app.route("/memo/add", methods=["POST"])
 def add_to_memo():
-    # 未ログインなら静かにログイン画面へ
+    # 未ログインならログインへ
     if not is_logged_in():
         flash("買い物メモを使うにはログインしてください。", "warning")
         return redirect(url_for("login"))
 
-    # ラジオボタンの値（"add" か "remove"）
-    action = request.form.get("action")
+    action = request.form.get("action")  # "add" or "remove"
     product_id_raw = request.form.get("product_id")
 
     try:
@@ -245,27 +244,24 @@ def add_to_memo():
         return redirect(request.referrer or url_for("search_products"))
 
     user_id = session.get("user_id")
-    if not user_id:
+    if user_id is None:
         flash("ユーザー情報が取得できませんでした。", "danger")
         return redirect(url_for("login"))
 
-    print("DEBUG /memo/add action:", action, "user_id:", user_id, "product_id:", product_id)
+    print("DEBUG /memo/add:", action, "user_id:", user_id, "product_id:", product_id)
 
-    # --- DB処理 ---
     if action == "add":
         sql = """
             INSERT IGNORE INTO shopping_memos (user_id, product_id)
             VALUES (%s, %s)
         """
         msg = "買い物メモに追加しました。"
-
     elif action == "remove":
         sql = """
             DELETE FROM shopping_memos
             WHERE user_id = %s AND product_id = %s
         """
         msg = "買い物メモから削除しました。"
-
     else:
         flash("不正な操作です。", "danger")
         return redirect(request.referrer or url_for("search_products"))
@@ -279,17 +275,9 @@ def add_to_memo():
     return redirect(request.referrer or url_for("search_products"))
 
 
-
-
-
-# --- 近隣店舗などプレースホルダー ---
-@app.route("/favorites/stores")
-def favorites_stores():
-    return _placeholder("お気に入り店舗画面")
-
-# =========================
+# ------------------------------
 # Google Places API（近隣店舗検索）
-# =========================
+# ------------------------------
 @app.route("/api/nearby_stores", methods=["POST"])
 def api_nearby_stores():
     data = request.get_json() or {}
@@ -299,22 +287,19 @@ def api_nearby_stores():
     if lat is None or lng is None:
         return jsonify({"error": "lat, lng が必要です"}), 400
 
-    if not GOOGLE_PLACES_KEY:
-        return jsonify({"error": "GOOGLE_PLACES_KEY が設定されていません。.env を確認してください。"}), 500
-
     url = "https://places.googleapis.com/v1/places:searchNearby"
 
     headers = {
         "Content-Type": "application/json",
         "X-Goog-Api-Key": GOOGLE_PLACES_KEY,
         "X-Goog-FieldMask": (
-            "places.id,places.displayName,places.formattedAddress,"
+            "places.displayName,places.formattedAddress,"
             "places.location,places.rating"
         ),
     }
 
     payload = {
-        "includedTypes": ["supermarket"],  # スーパーに絞る
+        "includedTypes": ["supermarket"],
         "maxResultCount": 20,
         "locationRestriction": {
             "circle": {
@@ -324,7 +309,6 @@ def api_nearby_stores():
         },
     }
 
-    # ★ ここから下がさっきの try ブロック
     try:
         resp = requests.post(url, headers=headers, json=payload, timeout=10)
         resp.raise_for_status()
@@ -336,129 +320,55 @@ def api_nearby_stores():
 
     for p in raw.get("places", []):
         loc = p.get("location", {})
-        places.append({
-            "place_id": p.get("id"),
-            "name": p.get("displayName", {}).get("text"),
-            "address": p.get("formattedAddress"),
-            "lat": loc.get("latitude"),
-            "lng": loc.get("longitude"),
-            "rating": p.get("rating"),
-        })
+        places.append(
+            {
+                "name": p.get("displayName", {}).get("text"),
+                "address": p.get("formattedAddress"),
+                "lat": loc.get("latitude"),
+                "lng": loc.get("longitude"),
+                "rating": p.get("rating"),
+            }
+        )
 
     return jsonify({"places": places})
 
 
-
-# --- 近隣店舗検索　---
+# --- 近隣店舗画面 ---
 @app.route("/search/stores")
 def search_stores():
     return render_template(
         "search_stores.html",
         logged_in=is_logged_in(),
-        user=session.get("user")
+        user=session.get("user"),
     )
+
+
+# ------------------------------
+# プレースホルダー画面
+# ------------------------------
+@app.route("/favorites/stores")
+def favorites_stores():
+    return _placeholder("お気に入り店舗画面")
 
 
 @app.route("/purchases")
 def purchases():
     return _placeholder("購入履歴画面")
 
+
 @app.route("/cart")
 def cart():
     return _placeholder("買い物メモ画面")
 
-# =========================
-# 商品価格投稿画面（JAN必須＋DBから商品名取得）
-# =========================
-@app.route("/price/post", methods=["GET", "POST"])
+
+@app.route("/price/post")
 def price_post():
-    if not is_logged_in():
-        flash("価格を投稿するにはログインが必要です。", "warning")
-        return redirect(url_for("login"))
-
-    # --- GET: フォーム表示 ---
-    if request.method == "GET":
-        prefill_store_name = request.args.get("store_name", "") or ""
-        return render_template(
-            "price_post.html",
-            logged_in=is_logged_in(),
-            user=session.get("user"),
-            store_name=prefill_store_name,
-            recent_posts=MOCK_PRICE_POSTS[-5:],  # 直近5件だけ表示
-        )
-
-    # --- POST: 入力内容を検証して、メモリ上に保存 ---
-    jan = (request.form.get("jan") or "").strip()
-    store_name = (request.form.get("store_name") or "").strip()
-    price_str = (request.form.get("price") or "").strip()
-
-    # ✅ JANコード必須
-    if not jan:
-        flash("JANコードは必須です。入力してください。", "warning")
-        return redirect(url_for("price_post"))
-
-    # ✅ JANコードは数字のみ（必要なら桁数チェックも追加可）
-    if not jan.isdigit():
-        flash("JANコードは数字のみで入力してください。", "warning")
-        return redirect(url_for("price_post"))
-
-    # ✅ 店舗名必須
-    if not store_name:
-        flash("店舗名を入力してください。", "warning")
-        return redirect(url_for("price_post"))
-
-    # ✅ 価格チェック
-    if not price_str.isdigit():
-        flash("価格は整数で入力してください。", "warning")
-        return redirect(url_for("price_post"))
-    price = int(price_str)
-
-    # --- DBから商品名などを取得 ---
-    # ここでは ProductDAO に find_by_jan(jan) がある前提
-    product = None
-    try:
-        # もしまだメソッドが無い場合は、この一行で AttributeError が出るので、
-        # 後ろに書いてある「暫定実装」を使ってください。
-        product = ProductDAO.find_by_jan(jan)
-    except AttributeError:
-        # ★ 暫定版：search_by_keyword で JAN を検索して最初の1件を採用
-        candidates = ProductDAO.search_by_keyword(jan)
-        if candidates:
-            product = candidates[0]
-
-    if not product:
-        flash("このJANコードの商品が商品マスタに登録されていません。先に商品登録を行ってください。", "danger")
-        return redirect(url_for("price_post"))
-
-    # Product オブジェクトから商品名を取得（name という属性名を想定）
-    product_name = getattr(product, "name", None) or "(名称未設定)"
-
-    user_email = session.get("user")
-
-    # 将来 DB に差し替える箇所（今はメモリに保存）
-    add_mock_price_post(
-        jan=jan,
-        product_name=product_name,
-        store_name=store_name,
-        price=price,
-        user_email=user_email,
-    )
-
-    flash(f"『{product_name}』の価格情報を投稿しました。（現在はアプリ内の一時保存です）", "success")
-    return redirect(url_for("price_post"))
+    return _placeholder("価格情報提供（投稿）画面")
 
 
 @app.route("/mypage")
 def mypage():
-    if not is_logged_in():
-        return redirect(url_for("login"))
-
-    return render_template(
-        "mypage.html",
-        user=session.get("user"),
-        logged_in=True,
-        user_rating=4.2  # ← DB接続前の仮データ
-    )
+    return _placeholder("mypage.html")
 
 
 def _placeholder(title: str) -> str:
@@ -485,5 +395,7 @@ def _placeholder(title: str) -> str:
     </html>
     """
 
+
 if __name__ == "__main__":
     app.run(host="127.0.0.1", port=5000, debug=True)
+
