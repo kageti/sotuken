@@ -8,7 +8,15 @@
   <style>
     body { background: #f8f9fa; }
     .result-card:hover { transform: translateY(-2px); transition: .15s ease; }
-    .badge-jan { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
+    .badge-jan { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Courier New", monospace; }
+    
+    /* ★ 買い物メモブロックの枠 */
+    .memo-box {
+      border: 1px solid #dee2e6;
+      border-radius: .35rem;
+      padding: .4rem .6rem .6rem;
+      background-color: #ffffff;
+    } 
   </style>
 </head>
 <body>
@@ -28,6 +36,7 @@
   </header>
 
   <main class="container my-4">
+    <!-- 検索フォーム -->
     <form class="card shadow-sm p-3 mb-4 bg-white" method="get" action="{{ url_for('search_products') }}">
       <div class="row g-3 align-items-end">
         <div class="col-12 col-md-6">
@@ -60,8 +69,10 @@
 
     {% if results %}
       <p class="text-muted mb-2">検索結果：<strong>{{ results|length }}</strong> 件</p>
+
       <div class="row g-3">
         {% for p in results %}
+          <!-- ★ ここで 1列 / 2列 / 3列 を制御 -->
           <div class="col-12 col-md-6 col-lg-4">
             <div class="card result-card shadow-sm h-100">
               <div class="card-body">
@@ -80,20 +91,46 @@
                   <span>更新: {{ p.updated_at.strftime('%Y-%m-%d %H:%M') }}</span>
                 </div>
               </div>
-              <div class="card-footer bg-white d-flex gap-2">
+
+              <div class="card-footer bg-white d-flex flex-column gap-2">
                 <button class="btn btn-outline-primary btn-sm w-100" disabled>詳細（準備中）</button>
 
-               <form action="{{ url_for('add_to_memo') }}" method="post" class="mt-2">
-                <input type="hidden" name="product_id" value="{{ p.id }}">
-                <button class="btn btn-outline-success w-100">
-                  📝 買い物メモに追加
-                </button>
-              </form>
+                <!-- ★ 買い物メモ枠 ＋ ラベル ＋ 追加/削除ボタン -->
+                <div class="memo-box mt-1">
+                  <div class="small fw-semibold mb-2">買い物メモ</div>
 
+                  <form action="{{ url_for('add_to_memo') }}" method="post" class="w-100">
+                    <input type="hidden" name="product_id" value="{{ p.id }}">
 
+                    <div class="d-flex gap-2 mb-1">
+                      <!-- 追加 -->
+                      <div class="flex-fill">
+                        <input type="radio"
+                               class="btn-check memo-action-radio"
+                               name="action"
+                               id="add-{{ p.id }}"
+                               value="add"
+                               {% if not (logged_in and p.id in memo_product_ids) %}checked{% endif %}>
+                        <label class="btn btn-outline-success btn-sm w-100" for="add-{{ p.id }}">追加</label>
+                      </div>
+
+                      <!-- 削除 -->
+                      <div class="flex-fill">
+                        <input type="radio"
+                               class="btn-check memo-action-radio"
+                               name="action"
+                               id="remove-{{ p.id }}"
+                               value="remove"
+                               {% if logged_in and p.id in memo_product_ids %}checked{% endif %}>
+                        <label class="btn btn-outline-danger btn-sm w-100" for="remove-{{ p.id }}">削除</label>
+                      </div>
+                    </div>
+                  </form>
+                </div>
               </div>
-            </div>
-          </div>
+
+            </div> <!-- card -->
+          </div>   <!-- col -->
         {% endfor %}
       </div>
     {% else %}
@@ -106,5 +143,18 @@
   </footer>
 
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+
+  <!-- ラジオが切り替わったら自動でフォーム送信 -->
+  <script>
+    document.addEventListener('DOMContentLoaded', function () {
+      document.querySelectorAll('.memo-action-radio').forEach(function (el) {
+        el.addEventListener('change', function () {
+          if (this.form) {
+            this.form.submit();
+          }
+        });
+      });
+    });
+  </script>
 </body>
 </html>

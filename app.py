@@ -11,6 +11,7 @@ import requests
 from dotenv import load_dotenv
 from dao.shopping_memo_dao import ShoppingMemoDAO
 from db import get_connection
+from flask import get_flashed_messages
 
 
 
@@ -56,7 +57,7 @@ def _parse_dt(s: str) -> datetime:
 
 # --- 認証ヘルパ ---
 def is_logged_in():
-    return "user" in session
+    return "user_id" in session
 
 # --- Home ---
 @app.route("/")
@@ -66,7 +67,10 @@ def home():
 # --- ログイン ---
 @app.route("/login", methods=["GET", "POST"])
 def login():
-    # ★ すでにログインしている人はログイン画面に行けない
+    # ★ ログイン画面に来た時点でフラッシュ全部破棄
+    get_flashed_messages()
+
+    # ★ すでにログイン済みならホームへ追い返す
     if is_logged_in():
         return redirect(url_for("home"))
 
@@ -77,10 +81,11 @@ def login():
 
         if user and check_password_hash(user.password_hash, password):
             session["user"] = email
-            session["user_id"] = user.user_id
-            flash("ログインしました。", "success")
+            session["user_id"] = user.id
+            # ★ ログイン成功時もメッセージ出さない
             return redirect(url_for("home"))
 
+        # ★ このメッセージだけ残す（間違えたとき）
         flash("メールアドレスまたはパスワードが正しくありません。", "danger")
         return redirect(url_for("login"))
 
@@ -234,15 +239,15 @@ def search_products():
         user=session.get("user")
     )
 
-# --- 買い物メモに追加 ---
+# --- 買い物メモ（追加 or 削除） ---
 @app.route("/memo/add", methods=["POST"])
 def add_to_memo():
-    # --- 未ログインならログインへ ---
+    # 未ログインなら静かにログインへ
     if not is_logged_in():
-        flash("買い物メモを使うにはログインしてください。", "warning")
         return redirect(url_for("login"))
 
-    # --- ログインユーザー情報 ---
+    # ラジオボタンの値: "add" or "remove"
+    action = request.form.get("action")
     product_id_raw = request.form.get("product_id")
 
     try:
@@ -251,26 +256,36 @@ def add_to_memo():
         flash("不正な商品です。", "danger")
         return redirect(request.referrer or url_for("search_products"))
 
-    user_email = session.get("user")
-    user_id = session.get("user_id")   # ★これを追加！
-    print("DEBUG user_id from session:", user_id)
-
+    user_id = session.get("user_id")
     if not user_id:
-        flash("ユーザー情報が取得できませんでした。", "danger")
         return redirect(url_for("login"))
 
-    # --- DBに追加（user_id + product_id） ---
-    sql = """
-        INSERT IGNORE INTO shopping_memos (user_id, product_id)
-        VALUES (%s, %s)
-    """
+    # --- DB処理 ---
+    if action == "add":
+        sql = """
+            INSERT IGNORE INTO shopping_memos (user_id, product_id)
+            VALUES (%s, %s)
+        """
+        msg = "買い物メモに追加しました。"
+    elif action == "remove":
+        sql = """
+            DELETE FROM shopping_memos
+            WHERE user_id = %s AND product_id = %s
+        """
+        msg = "買い物メモから削除しました。"
+    else:
+        flash("不正な操作です。", "danger")
+        return redirect(request.referrer or url_for("search_products"))
+
+    from db import get_connection
     with get_connection() as conn:
         with conn.cursor() as cur:
             cur.execute(sql, (user_id, product_id))
         conn.commit()
 
-    flash("買い物メモに追加しました。", "success")
+    flash(msg, "success")
     return redirect(request.referrer or url_for("search_products"))
+
 
 
 
@@ -418,7 +433,16 @@ def price_post():
 
 @app.route("/mypage")
 def mypage():
-    return _placeholder("mypage.html")
+    if not is_logged_in():
+        return redirect(url_for("login"))
+
+    return render_template(
+        "mypage.html",
+        user=session.get("user"),
+        logged_in=True,
+        user_rating=4.2  # ← DB接続前の仮データ
+    )
+
 
 def _placeholder(title: str) -> str:
     return f"""
