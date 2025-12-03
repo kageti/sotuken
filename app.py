@@ -226,17 +226,27 @@ def search_products():
     results = search_products_service(q, sort, price_min_i, price_max_i)
 
     # ★ ログイン中ユーザーの「買い物メモに入っている product_id 一覧」
-    memo_product_ids: set[int] = set()
+    memo_product_ids = set()
     if is_logged_in():
         user_id = session.get("user_id")
-        if user_id is not None:
+        if user_id:
+
+            # 🔽 ここが追加部分！
+            with get_connection() as conn:
+                with conn.cursor() as cur:
+                    cur.execute("SELECT DATABASE(), COUNT(*) FROM shopping_memos")
+                    dbname, cnt = cur.fetchone()
+                    print("DEBUG search_products DB:", dbname, "rows:", cnt)
+
+            # 🔽 ここから元の処理
             sql = "SELECT product_id FROM shopping_memos WHERE user_id = %s"
             with get_connection() as conn:
                 with conn.cursor() as cur:
                     cur.execute(sql, (user_id,))
                     for (pid,) in cur.fetchall():
                         memo_product_ids.add(pid)
-            print("DEBUG memo_product_ids:", memo_product_ids)
+
+    print("DEBUG memo_product_ids:", memo_product_ids)
 
     store_names: list[str] = []  # 将来のフィルタ用
 
@@ -254,7 +264,6 @@ def search_products():
     )
 
 
-# --- 買い物メモ 追加・削除 ---
 # --- 買い物メモ 追加・削除 ---
 @app.route("/memo/add", methods=["POST"])
 def add_to_memo():
@@ -302,28 +311,26 @@ def add_to_memo():
     try:
         with get_connection() as conn:
             # どのDBにつながっているか確認
-            try:
-                with conn.cursor() as cur:
-                    cur.execute("SELECT DATABASE()")
-                    (dbname,) = cur.fetchone()
-                    print("DEBUG /memo/add: DATABASE() =", dbname)
-            except Exception as e:
-                print("DEBUG /memo/add: failed to get DATABASE():", e)
+            with conn.cursor() as cur:
+                cur.execute("SELECT DATABASE()")
+                (dbname,) = cur.fetchone()
+                print("DEBUG /memo/add: DATABASE() =", dbname)
 
             with conn.cursor() as cur:
                 cur.execute(sql, (user_id, product_id))
                 print("DEBUG /memo/add: executed SQL, rowcount =", cur.rowcount)
+
             conn.commit()
             print("DEBUG /memo/add: COMMIT OK")
 
     except Exception as e:
-        # ここに来たら SQL か接続でエラーが出ている
         print("ERROR /memo/add: DB error:", repr(e))
         flash("データベース処理でエラーが発生しました。", "danger")
         return redirect(request.referrer or url_for("search_products"))
 
     flash(msg, "success")
     return redirect(request.referrer or url_for("search_products"))
+
 
 
 # ------------------------------
