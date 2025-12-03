@@ -33,7 +33,35 @@ users = {
     "test@example.com": {"password": "pass"},
     "test": {"password": "pass"},
 }
+app = Flask(__name__)
+app.config["SECRET_KEY"] = "change-me"  # 本番は環境変数へ
 
+# --- 仮ユーザーストア（DBなしで動かす用） ---
+users = {
+    "test": {"password": "pass"},
+    "test@example.com": {"password": "pass"},
+}
+
+# --- 仮 価格投稿ストア（DBなしで動かす用） ---
+MOCK_PRICE_POSTS = []  # 将来は DB（product_prices テーブル）に差し替え予定
+
+
+def add_mock_price_post(jan, product_name, store_name, price, user_email):
+    """
+    将来的に DAO を呼ぶ形に差し替えるためのラッパ関数。
+    今はメモリ上のリストに追加するだけ。
+    """
+    post = {
+        "id": len(MOCK_PRICE_POSTS) + 1,
+        "jan": jan,
+        "product_name": product_name,
+        "store_name": store_name,
+        "price": price,
+        "user_email": user_email,
+        "posted_at": datetime.now().isoformat(timespec="seconds"),
+    }
+    MOCK_PRICE_POSTS.append(post)
+    return post["id"]
 
 # ------------------------------
 # ヘルパ
@@ -384,9 +412,86 @@ def cart():
     return _placeholder("買い物メモ画面")
 
 
-@app.route("/price/post")
+# =========================
+# 商品価格投稿画面（JAN必須＋DBから商品名取得）
+# =========================
+@app.route("/price/post", methods=["GET", "POST"])
 def price_post():
-    return _placeholder("価格情報提供（投稿）画面")
+    if not is_logged_in():
+        flash("価格を投稿するにはログインが必要です。", "warning")
+        return redirect(url_for("login"))
+
+    # --- GET: フォーム表示 ---
+    if request.method == "GET":
+        prefill_store_name = request.args.get("store_name", "") or ""
+        return render_template(
+            "price_post.html",
+            logged_in=is_logged_in(),
+            user=session.get("user"),
+            store_name=prefill_store_name,
+            recent_posts=MOCK_PRICE_POSTS[-5:],  # 直近5件だけ表示
+        )
+
+    # --- POST: 入力内容を検証して、メモリ上に保存 ---
+    jan = (request.form.get("jan") or "").strip()
+    store_name = (request.form.get("store_name") or "").strip()
+    price_str = (request.form.get("price") or "").strip()
+
+    # ✅ JANコード必須
+    if not jan:
+        flash("JANコードは必須です。入力してください。", "warning")
+        return redirect(url_for("price_post"))
+
+    # ✅ JANコードは数字のみ（必要なら桁数チェックも追加可）
+    if not jan.isdigit():
+        flash("JANコードは数字のみで入力してください。", "warning")
+        return redirect(url_for("price_post"))
+
+    # ✅ 店舗名必須
+    if not store_name:
+        flash("店舗名を入力してください。", "warning")
+        return redirect(url_for("price_post"))
+
+    # ✅ 価格チェック
+    if not price_str.isdigit():
+        flash("価格は整数で入力してください。", "warning")
+        return redirect(url_for("price_post"))
+    price = int(price_str)
+
+    # --- DBから商品名などを取得 ---
+    # ここでは ProductDAO に find_by_jan(jan) がある前提
+    product = None
+    try:
+        # もしまだメソッドが無い場合は、この一行で AttributeError が出るので、
+        # 後ろに書いてある「暫定実装」を使ってください。
+        product = ProductDAO.find_by_jan(jan)
+    except AttributeError:
+        # ★ 暫定版：search_by_keyword で JAN を検索して最初の1件を採用
+        candidates = ProductDAO.search_by_keyword(jan)
+        if candidates:
+            product = candidates[0]
+
+    if not product:
+        flash("このJANコードの商品が商品マスタに登録されていません。先に商品登録を行ってください。", "danger")
+        return redirect(url_for("price_post"))
+
+    # Product オブジェクトから商品名を取得（name という属性名を想定）
+    product_name = getattr(product, "name", None) or "(名称未設定)"
+
+    user_email = session.get("user")
+
+    # 将来 DB に差し替える箇所（今はメモリに保存）
+    add_mock_price_post(
+        jan=jan,
+        product_name=product_name,
+        store_name=store_name,
+        price=price,
+        user_email=user_email,
+    )
+
+    flash(f"『{product_name}』の価格情報を投稿しました。（現在はアプリ内の一時保存です）", "success")
+    return redirect(url_for("price_post"))
+
 
 
 @app.route("/mypage")
