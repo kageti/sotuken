@@ -132,52 +132,62 @@ def register():
 # =========================
 # 商品検索（仮データ版）
 # =========================
+# =========================
+# 商品検索サービス（並び替え6種類対応版）
+# =========================
 def search_products_service(
     q: str | None,
     sort: str | None,
     price_min: int | None,
     price_max: int | None
 ):
-    
-    
     q = (q or "").strip()
     sort = (sort or "price_asc").strip()
 
-    def match(product):
-        # JAN 完全一致 or 前方一致
-        if q and q.isdigit():
-            if product["jan"].startswith(q):
-                return True
-        # テキスト部分一致（name, brand, category, store）
-        if q:
-            key = f"{product['name']} {product['brand']} {product['category']} {product['store']} {product['jan']}".lower()
-            if q.lower() not in key:
-                return False
-        # 価格フィルタ
-        if price_min is not None and product["price"] < price_min:
-            return False
-        if price_max is not None and product["price"] > price_max:
-            return False
-        return True
-
+    # --- 商品取得 ---
     if q:
         products = ProductDAO.search_by_keyword(q)
     else:
         products = []
 
-    # まだ price, trust, updated_at などを DB 側で持っていない前提で、
-    # いったんソートは「商品名」でごまかしておく
-    if sort == "price_asc":
-        products.sort(key=lambda p: getattr(p, "name", ""))
-    elif sort == "recent":
-        # updated_at カラムを Product に持たせたらここで使う
-        products.sort(key=lambda p: getattr(p, "id", 0), reverse=True)
-    elif sort == "trust_desc":
-        # trust カラムを持たせたらここで使う
-        products.sort(key=lambda p: getattr(p, "id", 0), reverse=True)
+    # --- 価格絞り込み（下限・上限） ---
+    if price_min is not None:
+        products = [p for p in products if getattr(p, "price", None) is not None and p.price >= price_min]
+    if price_max is not None:
+        products = [p for p in products if getattr(p, "price", None) is not None and p.price <= price_max]
 
-    # ひとまず price_min / price_max は未使用（あとで拡張）
+    # --- updated_at が None でも落ちないように ---
+    def updated_key(p):
+        return getattr(p, "updated_at", datetime.min) or datetime.min
+
+    # --- 並び替え ---
+    if sort == "price_asc":
+        # 価格が安い順
+        products.sort(key=lambda p: getattr(p, "price", 0))
+    elif sort == "price_desc":
+        # 価格が高い順
+        products.sort(key=lambda p: getattr(p, "price", 0), reverse=True)
+
+    elif sort == "updated_new":
+        # 更新が新しい順
+        products.sort(key=updated_key, reverse=True)
+    elif sort == "updated_old":
+        # 更新が古い順
+        products.sort(key=updated_key)
+
+    elif sort == "trust_desc":
+        # 信頼値が高い順
+        products.sort(key=lambda p: getattr(p, "trust", 0), reverse=True)
+    elif sort == "trust_asc":
+        # 信頼値が低い順
+        products.sort(key=lambda p: getattr(p, "trust", 0))
+
+    else:
+        # 想定外の値が来たらデフォルト（価格が安い順）
+        products.sort(key=lambda p: getattr(p, "price", 0))
+
     return products
+
 
 @app.route("/search/products")
 def search_products():

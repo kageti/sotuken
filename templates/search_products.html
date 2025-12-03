@@ -44,13 +44,36 @@
           <input id="price_max" name="price_max" type="number" min="0" class="form-control" value="{{ price_max }}">
         </div>
         <div class="col-12 col-md-2">
-          <label for="sort" class="form-label mb-1">並び替え</label>
-          <select id="sort" name="sort" class="form-select">
-            <option value="price_asc"  {% if sort=='price_asc' %}selected{% endif %}>価格が安い順</option>
-            <option value="recent"     {% if sort=='recent' %}selected{% endif %}>更新が新しい順</option>
-            <option value="trust_desc" {% if sort=='trust_desc' %}selected{% endif %}>信頼値が高い順</option>
-          </select>
-        </div>
+     <div class="col-6 col-md-3">
+     <label for="sort" class="form-label mb-1">並び替え</label>
+     <select id="sort" name="sort" class="form-select">
+    <!-- 価格 -->
+    <option value="price_asc"  {% if sort == 'price_asc'  %}selected{% endif %}>
+      価格が安い順
+    </option>
+    <option value="price_desc" {% if sort == 'price_desc' %}selected{% endif %}>
+      価格が高い順
+    </option>
+
+    <!-- 更新日時 -->
+    <option value="updated_new" {% if sort == 'updated_new' %}selected{% endif %}>
+      更新が新しい順
+    </option>
+    <option value="updated_old" {% if sort == 'updated_old' %}selected{% endif %}>
+      更新が古い順
+    </option>
+
+    <!-- 信頼値 -->
+    <option value="trust_desc" {% if sort == 'trust_desc' %}selected{% endif %}>
+      信頼値が高い順
+    </option>
+    <option value="trust_asc"  {% if sort == 'trust_asc'  %}selected{% endif %}>
+      信頼値が低い順
+    </option>
+  </select>
+</div>
+
+
       </div>
       <div class="mt-3 d-flex gap-2">
         <button class="btn btn-primary" type="submit">検索</button>
