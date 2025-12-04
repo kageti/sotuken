@@ -1,4 +1,5 @@
 import os
+import math
 from datetime import datetime
 
 import requests
@@ -17,6 +18,7 @@ from werkzeug.security import check_password_hash
 
 from dao.products_dao import ProductDAO
 from dao.users_dao import UserDAO, UserAlreadyExists
+from dao.favorite_stores_dao import FavoriteStoreDAO
 from db import get_connection  # ← 自作の db.py から接続関数をインポート
 
 # ------------------------------
@@ -296,18 +298,40 @@ def add_to_memo():
             INSERT IGNORE INTO shopping_memos (user_id, product_id)
             VALUES (%s, %s)
         """
-        msg = "買い物メモに追加しました。"
         print("買い物メモに追加しました。")
     elif action == "remove":
         sql = """
             DELETE FROM shopping_memos
             WHERE user_id = %s AND product_id = %s
         """
-        msg = "買い物メモから削除しました。"
+        print("買い物メモから削除しました。")
     else:
         print("DEBUG /memo/add: unknown action =", action)
         flash("不正な操作です。", "danger")
         return redirect(request.referrer or url_for("search_products"))
+
+    try:
+        with get_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT DATABASE()")
+                (dbname,) = cur.fetchone()
+                print("DEBUG /memo/add: DATABASE() =", dbname)
+
+            with conn.cursor() as cur:
+                cur.execute(sql, (user_id, product_id))
+                print("DEBUG /memo/add: executed SQL, rowcount =", cur.rowcount)
+
+            conn.commit()
+            print("DEBUG /memo/add: COMMIT OK")
+
+    except Exception as e:
+        print("ERROR /memo/add: DB error:", repr(e))
+        flash("データベース処理でエラーが発生しました。", "danger")
+        return redirect(request.referrer or url_for("search_products"))
+
+    # ✅ 成功時はポップアップを出さず、静かに元の画面へ戻る
+    return redirect(request.referrer or url_for("search_products"))
+
 
     try:
         with get_connection() as conn:
@@ -392,6 +416,7 @@ def api_nearby_stores():
     return jsonify({"places": places})
 
 
+
 # --- 近隣店舗画面 ---
 @app.route("/search/stores")
 def search_stores():
@@ -401,13 +426,95 @@ def search_stores():
         user=session.get("user"),
     )
 
+# ------------------------------
+# お気に入り店舗画面
+# ------------------------------
+def calc_distance(lat1, lng1, lat2, lng2):
+    """haversine formula（距離計算）"""
+    R = 6371.0  # km
+    dlat = math.radians(lat2 - lat1)
+    dlng = math.radians(lng2 - lng1)
+    a = (
+        math.sin(dlat / 2) ** 2
+        + math.cos(math.radians(lat1))
+        * math.cos(math.radians(lat2))
+        * math.sin(dlng / 2) ** 2
+    )
+    return R * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+
+@app.route("/favorites/stores", methods=["GET", "POST"])
+def favorites_stores():
+    if not is_logged_in():
+        flash("お気に入り店舗を利用するにはログインしてください。", "warning")
+        return redirect(url_for("login"))
+
+    user_id = session.get("user_id")
+    if user_id is None:
+        flash("ユーザー情報が取得できませんでした。", "danger")
+        return redirect(url_for("login"))
+
+    # --- 削除 POST 処理 ---
+    if request.method == "POST":
+        action = request.form.get("action")
+        store_id = request.form.get("store_id")
+        if action == "delete" and store_id:
+            FavoriteStoreDAO.remove(user_id, store_id)
+            flash("お気に入り店舗を削除しました。", "success")
+        else:
+            flash("不正な操作です。", "danger")
+        return redirect(url_for("favorites_stores"))
+
+    # --- GET: 一覧表示 ---
+    sort = request.args.get("sort", "name")  # "name" or "distance"
+
+    # 現在地（任意）: JS から lat/lng を付けて呼び出す想定
+    lat_raw = request.args.get("lat")
+    lng_raw = request.args.get("lng")
+    try:
+        user_lat = float(lat_raw) if lat_raw else None
+        user_lng = float(lng_raw) if lng_raw else None
+    except ValueError:
+        user_lat = user_lng = None
+
+    favorites = FavoriteStoreDAO.list_by_user(user_id)
+
+    # 距離計算（位置情報が取れている場合のみ）
+    for f in favorites:
+        f.distance_km = None
+        if (
+            user_lat is not None
+            and user_lng is not None
+            and getattr(f, "latitude", None) is not None
+            and getattr(f, "longitude", None) is not None
+        ):
+            f.distance_km = calc_distance(
+                user_lat, user_lng, f.latitude, f.longitude
+            )
+
+
+    # 並び替え
+    if sort == "distance":
+        favorites.sort(key=lambda x: (x.distance_km is None, x.distance_km or 0.0))
+    else:
+        favorites.sort(key=lambda x: x.store_name or "")
+
+    return render_template(
+        "favorites_stores.html",
+        favorites=favorites,
+        sort=sort,
+        user_lat=user_lat,
+        user_lng=user_lng,
+        logged_in=is_logged_in(),
+        user=session.get("user"),
+    )
+
 
 # ------------------------------
 # プレースホルダー画面
 # ------------------------------
-@app.route("/favorites/stores")
-def favorites_stores():
-    return _placeholder("お気に入り店舗画面")
+#@app.route("/favorites/stores")
+#def favorites_stores():
+#    return _placeholder("お気に入り店舗画面")
 
 
 @app.route("/purchases")
