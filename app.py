@@ -26,9 +26,40 @@ users = {
     "test": {"password": "pass"},
     "test@example.com": {"password": "pass"},
 }
+app = Flask(__name__)
+app.config["SECRET_KEY"] = "change-me"  # 本番は環境変数へ
+
+<<<<<<< HEAD
+# --- 仮 価格投稿ストア（DBなしで動かす用） ---
+MOCK_PRICE_POSTS = []  # 将来は DB（product_prices テーブル）に差し替え予定
+=======
+# --- 仮ユーザーストア（DBなしで動かす用） ---
+users = {
+    "test": {"password": "pass"},
+    "test@example.com": {"password": "pass"},
+}
 
 # --- 仮 価格投稿ストア（DBなしで動かす用） ---
 MOCK_PRICE_POSTS = []  # 将来は DB（product_prices テーブル）に差し替え予定
+
+
+def add_mock_price_post(jan, product_name, store_name, price, user_email):
+    """
+    将来的に DAO を呼ぶ形に差し替えるためのラッパ関数。
+    今はメモリ上のリストに追加するだけ。
+    """
+    post = {
+        "id": len(MOCK_PRICE_POSTS) + 1,
+        "jan": jan,
+        "product_name": product_name,
+        "store_name": store_name,
+        "price": price,
+        "user_email": user_email,
+        "posted_at": datetime.now().isoformat(timespec="seconds"),
+    }
+    MOCK_PRICE_POSTS.append(post)
+    return post["id"]
+>>>>>>> 4e86c4e9af03ee23b27b6db1e3bcee6c7ba5e9b4
 
 
 def add_mock_price_post(jan, product_name, store_name, price, user_email):
@@ -207,17 +238,39 @@ def search_products():
 
     results = search_products_service(q, sort, price_min_i, price_max_i)
 
+<<<<<<< HEAD
  # ★ ここから追加：ログイン中ユーザーの「メモ済み product_id 一覧」を取る
     memo_product_ids = set()
     if is_logged_in():
         user_id = session.get("user")
         if user_id:
+=======
+    # ★ ログイン中ユーザーの「買い物メモに入っている product_id 一覧」
+    memo_product_ids = set()
+    if is_logged_in():
+        user_id = session.get("user_id")
+        if user_id:
+
+            # 🔽 ここが追加部分！
+            with get_connection() as conn:
+                with conn.cursor() as cur:
+                    cur.execute("SELECT DATABASE(), COUNT(*) FROM shopping_memos")
+                    dbname, cnt = cur.fetchone()
+                    print("DEBUG search_products DB:", dbname, "rows:", cnt)
+
+            # 🔽 ここから元の処理
+>>>>>>> 4e86c4e9af03ee23b27b6db1e3bcee6c7ba5e9b4
             sql = "SELECT product_id FROM shopping_memos WHERE user_id = %s"
             with get_connection() as conn:
                 with conn.cursor() as cur:
                     cur.execute(sql, (user_id,))
                     for (pid,) in cur.fetchall():
                         memo_product_ids.add(pid)
+<<<<<<< HEAD
+=======
+
+    print("DEBUG memo_product_ids:", memo_product_ids)
+>>>>>>> 4e86c4e9af03ee23b27b6db1e3bcee6c7ba5e9b4
 
     store_names = []
 
@@ -237,6 +290,7 @@ def search_products():
     # ストア一覧（フィルタUIの将来拡張用）
     store_names = []
 
+<<<<<<< HEAD
     return render_template(
         "search_products.html",
         q=q,
@@ -250,6 +304,9 @@ def search_products():
     )
 
 # --- 買い物メモ（追加 or 削除） ---
+=======
+# --- 買い物メモ 追加・削除 ---
+>>>>>>> 4e86c4e9af03ee23b27b6db1e3bcee6c7ba5e9b4
 @app.route("/memo/add", methods=["POST"])
 def add_to_memo():
     # 未ログインなら静かにログインへ
@@ -287,17 +344,40 @@ def add_to_memo():
         flash("不正な操作です。", "danger")
         return redirect(request.referrer or url_for("search_products"))
 
+<<<<<<< HEAD
     from db import get_connection
     with get_connection() as conn:
         with conn.cursor() as cur:
             cur.execute(sql, (user_id, product_id))
         conn.commit()
+=======
+    try:
+        with get_connection() as conn:
+            # どのDBにつながっているか確認
+            with conn.cursor() as cur:
+                cur.execute("SELECT DATABASE()")
+                (dbname,) = cur.fetchone()
+                print("DEBUG /memo/add: DATABASE() =", dbname)
+
+            with conn.cursor() as cur:
+                cur.execute(sql, (user_id, product_id))
+                print("DEBUG /memo/add: executed SQL, rowcount =", cur.rowcount)
+
+            conn.commit()
+            print("DEBUG /memo/add: COMMIT OK")
+
+    except Exception as e:
+        print("ERROR /memo/add: DB error:", repr(e))
+        flash("データベース処理でエラーが発生しました。", "danger")
+        return redirect(request.referrer or url_for("search_products"))
+>>>>>>> 4e86c4e9af03ee23b27b6db1e3bcee6c7ba5e9b4
 
     flash(msg, "success")
     return redirect(request.referrer or url_for("search_products"))
 
 
 
+<<<<<<< HEAD
 
 # --- 近隣店舗などプレースホルダー ---
 @app.route("/favorites/stores")
@@ -305,6 +385,9 @@ def favorites_stores():
     return _placeholder("お気に入り店舗画面")
 
 # =========================
+=======
+# ------------------------------
+>>>>>>> 4e86c4e9af03ee23b27b6db1e3bcee6c7ba5e9b4
 # Google Places API（近隣店舗検索）
 # =========================
 @app.route("/api/nearby_stores", methods=["POST"])
@@ -384,6 +467,10 @@ def purchases():
 def cart():
     return _placeholder("買い物メモ画面")
 
+<<<<<<< HEAD
+=======
+
+>>>>>>> 4e86c4e9af03ee23b27b6db1e3bcee6c7ba5e9b4
 # =========================
 # 商品価格投稿画面（JAN必須＋DBから商品名取得）
 # =========================
@@ -463,6 +550,10 @@ def price_post():
 
     flash(f"『{product_name}』の価格情報を投稿しました。（現在はアプリ内の一時保存です）", "success")
     return redirect(url_for("price_post"))
+<<<<<<< HEAD
+=======
+
+>>>>>>> 4e86c4e9af03ee23b27b6db1e3bcee6c7ba5e9b4
 
 
 @app.route("/mypage")
