@@ -361,59 +361,37 @@ def add_to_memo():
 # ------------------------------
 # Google Places API（近隣店舗検索）
 # ------------------------------
-@app.route("/api/nearby_stores", methods=["POST"])
-def api_nearby_stores():
+@app.route("/api/favorite_store", methods=["POST"])
+def api_favorite_store():
+    """近隣店舗画面から、お気に入り店舗を登録する API"""
+    if "user_id" not in session:
+        return jsonify({"ok": False, "error": "not_logged_in"}), 401
+
     data = request.get_json() or {}
-    lat = data.get("lat")
-    lng = data.get("lng")
+    user_id = session["user_id"]
 
-    if lat is None or lng is None:
-        return jsonify({"error": "lat, lng が必要です"}), 400
+    store_id = data.get("store_id")
+    store_name = data.get("store_name")
+    latitude = data.get("lat")
+    longitude = data.get("lng")
+    open_now = data.get("open_now")  # 今回は None のままでOK
 
-    url = "https://places.googleapis.com/v1/places:searchNearby"
+    if not store_id or not store_name:
+        return jsonify({"ok": False, "error": "invalid_params"}), 400
 
-    headers = {
-        "Content-Type": "application/json",
-        "X-Goog-Api-Key": GOOGLE_PLACES_KEY,
-        "X-Goog-FieldMask": (
-            "places.displayName,places.formattedAddress,"
-            "places.location,places.rating"
-        ),
-    }
+    from dao.favorite_stores_dao import FavoriteStoreDAO
 
-    payload = {
-        "includedTypes": ["supermarket"],
-        "maxResultCount": 20,
-        "locationRestriction": {
-            "circle": {
-                "center": {"latitude": lat, "longitude": lng},
-                "radius": 1500,
-            }
-        },
-    }
+    FavoriteStoreDAO.add(
+        user_id=user_id,
+        store_id=store_id,
+        store_name=store_name,
+        latitude=latitude,
+        longitude=longitude,
+        open_now=open_now,
+    )
 
-    try:
-        resp = requests.post(url, headers=headers, json=payload, timeout=10)
-        resp.raise_for_status()
-    except requests.RequestException as e:
-        return jsonify({"error": f"Places API error: {e}"}), 500
+    return jsonify({"ok": True})
 
-    raw = resp.json()
-    places = []
-
-    for p in raw.get("places", []):
-        loc = p.get("location", {})
-        places.append(
-            {
-                "name": p.get("displayName", {}).get("text"),
-                "address": p.get("formattedAddress"),
-                "lat": loc.get("latitude"),
-                "lng": loc.get("longitude"),
-                "rating": p.get("rating"),
-            }
-        )
-
-    return jsonify({"places": places})
 
 
 

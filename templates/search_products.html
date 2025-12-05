@@ -132,6 +132,15 @@
                   <div class="h4 m-0">¥{{ "{:,}".format(p.price) }}</div>
                   <small class="text-muted"> / {{ p.store }}</small>
                 </div>
+
+                <div class="favorite-toggle" data-product-id="{{ p.id }}">
+                      {% if p.favorited %}
+                          <span class="fav-star active">★</span>
+                      {% else %}
+                          <span class="fav-star">☆</span>
+                      {% endif %}
+                  </div>
+                  
                 <div class="d-flex justify-content-between text-muted small">
                   <span>信頼値: {{ p.trust }}</span>
                   <span>更新: {{ p.updated_at.strftime('%Y-%m-%d %H:%M') }}</span>
