@@ -3,30 +3,57 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import List, Optional
 
+from db import get_connection  # ★ 追加
 
 @dataclass
 class FavoriteStore:
-    """お気に入り店舗 1 件分を表すクラス（将来 DB の行に対応）"""
-    user_id: int          # users.id（INT 外部キー想定）
-    store_id: str         # stores.id 相当（文字列 or 数値文字列）
-    store_name: str       # 店舗名（stores.name）
+    """お気に入り店舗 1 件分（favorite_stores テーブル 1行に対応）"""
+    user_id: int
+    store_id: str
+    store_name: str
     latitude: Optional[float] = None
     longitude: Optional[float] = None
-    open_now: Optional[bool] = None  # True: 営業中, False: 閉業中, None: 不明
+    open_now: Optional[bool] = None
+    # 距離表示用（/favorites/stores 側で後からつける）
+    distance_km: Optional[float] = None
 
 
 class FavoriteStoreDAO:
     """
-    お気に入り店舗 DAO（暫定：メモリ上のリストで管理）
-    将来は、このクラス内部だけを DB アクセスに差し替えればよい。
+    お気に入り店舗 DAO（DB 版）
+    favorite_stores テーブルを操作する
     """
-
-    _FAVORITES: List[FavoriteStore] = []
 
     @classmethod
     def list_by_user(cls, user_id: int) -> List[FavoriteStore]:
         """指定ユーザーのお気に入り店舗一覧を返す"""
-        return [f for f in cls._FAVORITES if f.user_id == user_id]
+        favorites: List[FavoriteStore] = []
+        with get_connection() as conn:
+            with conn.cursor(dictionary=True) as cur:
+                cur.execute(
+                    """
+                    SELECT user_id, store_id, store_name,
+                           latitude, longitude, open_now
+                    FROM favorite_stores
+                    WHERE user_id = %s
+                    ORDER BY store_name
+                    """,
+                    (user_id,),
+                )
+                for row in cur.fetchall():
+                    favorites.append(
+                        FavoriteStore(
+                            user_id=row["user_id"],
+                            store_id=row["store_id"],
+                            store_name=row["store_name"],
+                            latitude=row["latitude"],
+                            longitude=row["longitude"],
+                            open_now=bool(row["open_now"])
+                            if row["open_now"] is not None
+                            else None,
+                        )
+                    )
+        return favorites
 
     @classmethod
     def add(
@@ -39,32 +66,41 @@ class FavoriteStoreDAO:
         open_now: Optional[bool] = None,
     ) -> None:
         """
-        お気に入りに追加。
+        お気に入りに追加 or 更新。
         すでに同じ (user_id, store_id) があれば情報を更新する。
         """
-        for f in cls._FAVORITES:
-            if f.user_id == user_id and f.store_id == store_id:
-                f.store_name = store_name
-                f.latitude = latitude
-                f.longitude = longitude
-                f.open_now = open_now
-                return
-
-        cls._FAVORITES.append(
-            FavoriteStore(
-                user_id=user_id,
-                store_id=store_id,
-                store_name=store_name,
-                latitude=latitude,
-                longitude=longitude,
-                open_now=open_now,
-            )
-        )
+        with get_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    INSERT INTO favorite_stores
+                      (user_id, store_id, store_name,
+                       latitude, longitude, open_now)
+                    VALUES (%s, %s, %s, %s, %s, %s)
+                    ON DUPLICATE KEY UPDATE
+                      store_name = VALUES(store_name),
+                      latitude   = VALUES(latitude),
+                      longitude  = VALUES(longitude),
+                      open_now   = VALUES(open_now)
+                    """,
+                    (
+                        user_id,
+                        store_id,
+                        store_name,
+                        latitude,
+                        longitude,
+                        1 if open_now is True else 0 if open_now is False else None,
+                    ),
+                )
+            conn.commit()
 
     @classmethod
     def remove(cls, user_id: int, store_id: str) -> None:
         """お気に入りから削除"""
-        cls._FAVORITES = [
-            f for f in cls._FAVORITES
-            if not (f.user_id == user_id and f.store_id == store_id)
-        ]
+        with get_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "DELETE FROM favorite_stores WHERE user_id=%s AND store_id=%s",
+                    (user_id, store_id),
+                )
+            conn.commit()

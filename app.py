@@ -526,6 +526,22 @@ def purchases():
 def cart():
     return _placeholder("買い物メモ画面")
 
+@app.route("/favorite/toggle", methods=["POST"])
+def favorite_toggle():
+    if "user_id" not in session:
+        return jsonify({"ok": False, "error": "not_logged_in"}), 401
+
+    user_id = session["user_id"]
+    product_id = request.form.get("product_id")
+
+    try:
+        from dao.favorite_dao import FavoriteDAO
+    except Exception:
+        return jsonify({"ok": False, "error": "DAO_import_error"}), 500
+
+    favorited = FavoriteDAO.toggle(user_id, product_id)
+    return jsonify({"ok": True, "favorited": favorited})
+
 
 # =========================
 # 商品価格投稿画面（JAN必須＋DBから商品名取得）

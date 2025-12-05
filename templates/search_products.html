@@ -19,6 +19,27 @@
       padding: .4rem .6rem .6rem;
       background-color: #ffffff;
     }
+
+    /* お気に入り切り替えボタン */
+    .favorite-toggle {
+        font-size: 26px;
+        cursor: pointer;
+        user-select: none;
+        position: absolute;
+        top: 10px;
+        right: 10px;
+    }
+
+    .fav-star {
+        color: #aaa;
+        transition: .2s;
+    }
+
+    .fav-star.active {
+        color: gold;
+        text-shadow: 0 0 5px orange;
+    }
+
   </style>
 </head>
 <body>
@@ -92,6 +113,14 @@
                 <div class="d-flex align-items-baseline gap-2 mb-1">
                   <div class="h4 m-0">¥{{ "{:,}".format(p.price) }}</div>
                   <small class="text-muted"> / {{ p.store }}</small>
+                  <div class="favorite-toggle" data-product-id="{{ p.id }}">
+                      {% if p.favorited %}
+                          <span class="fav-star active">★</span>
+                      {% else %}
+                          <span class="fav-star">☆</span>
+                      {% endif %}
+                  </div>
+
                 </div>
                 <div class="d-flex justify-content-between text-muted small">
                   <span>信頼値: {{ p.trust }}</span>
@@ -164,5 +193,34 @@
   </footer>
 
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  <script>
+    document.addEventListener("click", async (e) => {
+        if (!e.target.classList.contains("fav-star")) return;
+
+        const star = e.target;
+        const container = star.closest(".favorite-toggle");
+        const productId = container.dataset.productId;
+
+        const formData = new FormData();
+        formData.append("product_id", productId);
+
+        const res = await fetch("/favorite/toggle", {
+            method: "POST",
+            body: formData
+        });
+
+        const data = await res.json();
+        if (!data.ok) return;
+
+        if (data.favorited) {
+            star.textContent = "★";
+            star.classList.add("active");
+        } else {
+            star.textContent = "☆";
+            star.classList.remove("active");
+        }
+    });
+  </script>
+
 </body>
 </html>
