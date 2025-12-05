@@ -9,21 +9,7 @@
   <style>
     body { background: #f8f9fa; }
     .result-card:hover { transform: translateY(-2px); transition: .15s ease; }
-<<<<<<< HEAD
     .badge-jan { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
-=======
-    .badge-jan {
-      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
-                   "Liberation Mono", "Courier New", monospace;
-    }
-    /* 買い物メモブロックの枠 */
-    .memo-box {
-      border: 1px solid #dee2e6;
-      border-radius: .35rem;
-      padding: .4rem .6rem .6rem;
-      background-color: #ffffff;
-    }
->>>>>>> 4e86c4e9af03ee23b27b6db1e3bcee6c7ba5e9b4
   </style>
 </head>
 <body>
@@ -43,32 +29,22 @@
   </header>
 
   <main class="container my-4">
-<<<<<<< HEAD
     <form class="card shadow-sm p-3 mb-4 bg-white" method="get" action="{{ url_for('search_products') }}">
-=======
-    <!-- 検索フォーム -->
-    <form class="card shadow-sm p-3 mb-4 bg-white"
-          method="get"
-          action="{{ url_for('search_products') }}">
->>>>>>> 4e86c4e9af03ee23b27b6db1e3bcee6c7ba5e9b4
       <div class="row g-3 align-items-end">
         <div class="col-12 col-md-6">
           <label for="q" class="form-label mb-1">フリーワード / JAN</label>
-          <input id="q" name="q" class="form-control"
-                 value="{{ q }}" placeholder="例：牛乳 / 4901234...">
+          <input id="q" name="q" class="form-control" value="{{ q }}" placeholder="例：牛乳 / 4901234...">
         </div>
         <div class="col-6 col-md-2">
           <label for="price_min" class="form-label mb-1">価格(下限)</label>
-          <input id="price_min" name="price_min" type="number" min="0"
-                 class="form-control" value="{{ price_min }}">
+          <input id="price_min" name="price_min" type="number" min="0" class="form-control" value="{{ price_min }}">
         </div>
         <div class="col-6 col-md-2">
           <label for="price_max" class="form-label mb-1">価格(上限)</label>
-          <input id="price_max" name="price_max" type="number" min="0"
-                 class="form-control" value="{{ price_max }}">
+          <input id="price_max" name="price_max" type="number" min="0" class="form-control" value="{{ price_max }}">
         </div>
-        <div class="col-12 col-md-2">
-     <div class="col-6 col-md-3">
+        
+     <div class="col-12 col-md-2">
      <label for="sort" class="form-label mb-1">並び替え</label>
      <select id="sort" name="sort" class="form-select">
     <!-- 価格 -->
@@ -138,48 +114,6 @@
                 </button>
               </form>
 
-<<<<<<< HEAD
-=======
-                  <form action="{{ url_for('add_to_memo') }}" method="post" class="w-100">
-                    <!-- ★ Python側の属性名 id を使う -->
-                    <input type="hidden" name="product_id" value="{{ p.id }}">
-
-                    <div class="d-flex gap-2 mb-1">
-
-                      <!-- 追加ボタン -->
-                      <button
-                        type="submit"
-                        name="action"
-                        value="add"
-                        class="btn btn-sm w-50
-                          {% if p.id in memo_product_ids %}
-                            btn-outline-success
-                          {% else %}
-                            btn-success
-                          {% endif %}
-                        ">
-                        追加
-                      </button>
-
-                      <!-- 削除ボタン -->
-                      <button
-                        type="submit"
-                        name="action"
-                        value="remove"
-                        class="btn btn-sm w-50
-                          {% if p.id in memo_product_ids %}
-                            btn-danger
-                          {% else %}
-                            btn-outline-danger
-                          {% endif %}
-                        ">
-                        削除
-                      </button>
-
-                    </div>
-                  </form>
-                </div>
->>>>>>> 4e86c4e9af03ee23b27b6db1e3bcee6c7ba5e9b4
 
               </div>
             </div>
@@ -187,9 +121,7 @@
         {% endfor %}
       </div>
     {% else %}
-      <div class="alert alert-info">
-        該当する商品が見つかりませんでした。条件を変えてお試しください。
-      </div>
+      <div class="alert alert-info">該当する商品が見つかりませんでした。条件を変えてお試しください。</div>
     {% endif %}
   </main>
 
