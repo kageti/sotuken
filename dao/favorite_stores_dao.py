@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import List, Optional
 
-from db import get_connection  # ★ 追加
+from db import get_connection  
 
 @dataclass
 class FavoriteStore:
