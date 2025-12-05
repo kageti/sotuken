@@ -1,5 +1,4 @@
 # dao/favorite_dao.py
-
 import mysql.connector
 from db import get_connection
 
@@ -31,3 +30,16 @@ class FavoriteDAO:
             conn.commit()
             conn.close()
             return True    # 登録後なので True
+
+    @classmethod
+    def get_favorite_ids(cls, user_id: int):
+        """指定ユーザーがお気に入り登録している product_id の集合を返す"""
+        conn = get_connection()
+        cur = conn.cursor()
+        cur.execute(
+            "SELECT product_id FROM favorites WHERE user_id=%s",
+            (user_id,),
+        )
+        ids = {row[0] for row in cur.fetchall()}
+        conn.close()
+        return ids

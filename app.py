@@ -19,6 +19,8 @@ from werkzeug.security import check_password_hash
 from dao.products_dao import ProductDAO
 from dao.users_dao import UserDAO, UserAlreadyExists
 from dao.favorite_stores_dao import FavoriteStoreDAO
+from dao.favorite_dao import FavoriteDAO
+
 from db import get_connection  # ← 自作の db.py から接続関数をインポート
 
 # ------------------------------
@@ -229,40 +231,39 @@ def search_products():
 
     # ★ ログイン中ユーザーの「買い物メモに入っている product_id 一覧」
     memo_product_ids = set()
+    favorite_product_ids = set()
+
     if is_logged_in():
         user_id = session.get("user_id")
+
         if user_id:
-
-            # 🔽 ここが追加部分！
+            # ① 買い物メモに入っている product_id を集める（今までの処理）
             with get_connection() as conn:
                 with conn.cursor() as cur:
-                    cur.execute("SELECT DATABASE(), COUNT(*) FROM shopping_memos")
-                    dbname, cnt = cur.fetchone()
-                    print("DEBUG search_products DB:", dbname, "rows:", cnt)
-
-            # 🔽 ここから元の処理
-            sql = "SELECT product_id FROM shopping_memos WHERE user_id = %s"
-            with get_connection() as conn:
-                with conn.cursor() as cur:
-                    cur.execute(sql, (user_id,))
+                    cur.execute(
+                        "SELECT product_id FROM shopping_memos WHERE user_id = %s",
+                        (user_id,)
+                    )
                     for (pid,) in cur.fetchall():
                         memo_product_ids.add(pid)
 
-    print("DEBUG memo_product_ids:", memo_product_ids)
+            # ② お気に入りに登録している product_id を集める（新規）
+            favorite_product_ids = FavoriteDAO.get_favorite_ids(user_id)
 
-    store_names: list[str] = []  # 将来のフィルタ用
+    # ③ 各商品にフラグを立てる
+    for p in results:
+        p.in_memo = (p.id in memo_product_ids)
+        p.favorited = (p.id in favorite_product_ids)
 
     return render_template(
         "search_products.html",
         q=q,
         sort=sort,
-        price_min=price_min or "",
-        price_max=price_max or "",
+        price_min=price_min,
+        price_max=price_max,
         results=results,
-        store_names=store_names,
-        logged_in=is_logged_in(),
-        user=session.get("user"),
         memo_product_ids=memo_product_ids,
+        # favorite_product_ids を渡さなくても、p.favorited を使っているのでOK
     )
 
 
