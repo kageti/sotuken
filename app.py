@@ -20,6 +20,8 @@ from dao.products_dao import ProductDAO
 from dao.users_dao import UserDAO, UserAlreadyExists
 from dao.favorite_stores_dao import FavoriteStoreDAO
 from dao.favorite_dao import FavoriteDAO
+from dao.store_dao import StoreDAO
+
 
 from db import get_connection  # ← 自作の db.py から接続関数をインポート
 
@@ -265,6 +267,41 @@ def search_products():
         memo_product_ids=memo_product_ids,
         # favorite_product_ids を渡さなくても、p.favorited を使っているのでOK
     )
+
+# =========================
+# 店舗サジェスト API（店舗名の候補を返す）
+# =========================
+@app.route("/api/store_suggest")
+def api_store_suggest():
+    q = (request.args.get("q") or "").strip()
+    if len(q) < 2:
+        # 1文字だけだと候補が多すぎるので返さない
+        return jsonify({"stores": []})
+
+    from difflib import SequenceMatcher
+
+    # 1) DB から「名前 LIKE %q%」で候補を取る
+    candidates = StoreDAO.search_by_name_like(q, limit=30)
+
+    # 2) Python 側で簡易スコアリング（似ている順に並び替え）
+    scored = []
+    for s in candidates:
+        score = SequenceMatcher(None, q, s.name).ratio()
+        scored.append((score, s))
+
+    scored.sort(key=lambda t: t[0], reverse=True)
+    top = scored[:10]
+
+    stores_json = [
+        {
+            "id": s.id,
+            "name": s.name,
+            "address": s.address or "",
+        }
+        for score, s in top
+    ]
+
+    return jsonify({"stores": stores_json})
 
 
 # --- 買い物メモ 追加・削除 ---

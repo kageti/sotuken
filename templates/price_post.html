@@ -1,219 +1,269 @@
 <!doctype html>
 <html lang="ja">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>価格情報投稿 - 価格比較アプリ</title>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>商品価格の投稿 - 価格比較アプリ</title>
 
   <link
     href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"
     rel="stylesheet"
-  />
+  >
 
   <style>
     body {
       background: #f5f6f8;
     }
-
     .page-header {
-      background: #ffffff;
-      border-bottom: 1px solid #e5e7eb;
+      border-bottom: 1px solid #dee2e6;
+      background: #fff;
     }
-
-    .page-header .app-title {
-      font-weight: 600;
-      letter-spacing: .03em;
+    .page-header .navbar-brand {
+      font-weight: 700;
     }
-
-    .app-shell {
-      max-width: 1120px;
-      margin: 0 auto;
-    }
-
     .card-main {
-      border-radius: 1.1rem;
-      border: 1px solid #e5e7eb;
-      background: #ffffff;
+      border-radius: .75rem;
     }
-
-    .card-sub {
-      border-radius: 1.1rem;
-      border: 1px solid #e5e7eb;
-      background: #ffffff;
-    }
-
-    .post-item {
-      border-radius: 0.9rem;
-      background: #f9fafb;
-    }
-
-    .post-item + .post-item {
-      margin-top: .5rem;
-    }
-
-    .badge-price {
-      background: #e0edff;
-      color: #1d4ed8;
-      font-weight: 600;
-    }
-
-    @media (max-width: 767.98px) {
-      .app-shell {
-        padding-inline: .75rem;
-      }
+    .card-side {
+      border-radius: .75rem;
     }
   </style>
 </head>
 <body>
   <!-- ヘッダー -->
-  <header class="page-header py-3 mb-4">
-    <div class="app-shell d-flex justify-content-between align-items-center px-3 px-md-0">
-      <div class="app-title h4 m-0">価格比較アプリ</div>
-      <nav class="d-flex gap-2">
-        <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('home') }}">ホーム</a>
-        <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('search_products') }}">商品検索</a>
-        <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('search_stores') }}">近隣店舗検索</a>
+  <header class="page-header py-2 mb-4">
+    <nav class="container navbar navbar-expand-lg navbar-light">
+      <a class="navbar-brand" href="{{ url_for('home') }}">価格比較アプリ</a>
+      <div class="ms-auto d-flex align-items-center gap-2">
+        <a href="{{ url_for('home') }}" class="btn btn-outline-secondary btn-sm">ホーム</a>
+        <a href="{{ url_for('search_products') }}" class="btn btn-outline-secondary btn-sm">商品検索</a>
+        <a href="{{ url_for('search_stores') }}" class="btn btn-outline-secondary btn-sm">近隣店舗検索</a>
+
         {% if logged_in %}
-          <span class="text-muted small align-self-center d-none d-md-inline">{{ user }}</span>
-          <a class="btn btn-outline-danger btn-sm" href="{{ url_for('logout') }}">ログアウト</a>
+          <span class="text-muted small">{{ user }}</span>
+          <a href="{{ url_for('logout') }}" class="btn btn-outline-danger btn-sm">ログアウト</a>
         {% else %}
-          <a class="btn btn-primary btn-sm" href="{{ url_for('login') }}">ログイン</a>
+          <a href="{{ url_for('login') }}" class="btn btn-outline-primary btn-sm">ログイン</a>
+          <a href="{{ url_for('register') }}" class="btn btn-primary btn-sm">新規会員登録</a>
         {% endif %}
-      </nav>
-    </div>
+      </div>
+    </nav>
   </header>
 
-  <!-- メイン -->
-  <main class="pb-5">
-    <div class="app-shell px-3 px-md-0">
-      <div class="row g-4">
-        <!-- 左：投稿フォーム -->
-        <div class="col-lg-7">
-          <div class="card card-main shadow-sm">
-            <div class="card-body p-4">
-              <h5 class="card-title mb-2">商品価格の投稿</h5>
-              <p class="text-muted small mb-4">
-                店頭で確認した商品の価格を投稿して、みんなの買い物を助けましょう。<br>
-                商品名は、入力された JAN コードをもとにデータベースの商品マスタから自動取得されます。
-              </p>
+  <main class="container pb-5">
+    <!-- フラッシュメッセージ -->
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        <div class="mb-3">
+          {% for category, message in messages %}
+            <div class="alert alert-{{ category }} py-2 mb-2">
+              {{ message }}
+            </div>
+          {% endfor %}
+        </div>
+      {% endif %}
+    {% endwith %}
 
-              <form method="post">
-                <!-- 店舗名 -->
-                <div class="mb-3">
-                  <label class="form-label">店舗名 <span class="text-danger">*</span></label>
+    <div class="row g-4">
+      <!-- 左：投稿フォーム -->
+      <div class="col-lg-7">
+        <div class="card card-main shadow-sm">
+          <div class="card-body">
+            <h1 class="h4 mb-3">商品価格の投稿</h1>
+            <p class="text-muted small mb-4">
+              店頭で確認した商品の価格を投稿して、みんなの買い物を助けましょう。<br>
+              商品名は、入力された JAN コードをもとに商品マスタから自動取得されます。
+            </p>
+
+            <form method="post" action="{{ url_for('price_post') }}">
+              <!-- 店舗名 & サジェスト -->
+              <div class="mb-3 position-relative">
+                <label class="form-label">店舗名 <span class="text-danger">*</span></label>
+
+                <!-- サジェストで選ばれた店舗の id を保存する hidden -->
+                <input type="hidden" name="store_id" id="store_id">
+
+                <input
+                  type="text"
+                  class="form-control"
+                  id="store_name"
+                  name="store_name"
+                  value="{{ store_name or '' }}"
+                  placeholder="例）スーパーA 広島駅前店"
+                  autocomplete="off"
+                >
+                <div class="form-text">
+                  近隣店舗検索から遷移した場合は自動入力されます。手入力も可能です。
+                </div>
+
+                <!-- サジェスト候補リスト -->
+                <div
+                  id="store_suggest_list"
+                  class="list-group position-absolute w-100 shadow-sm"
+                  style="z-index: 20; max-height: 220px; overflow-y: auto; display:none;"
+                ></div>
+              </div>
+
+              <!-- JANコード -->
+              <div class="mb-3">
+                <label class="form-label">JANコード <span class="text-danger">*</span></label>
+                <input
+                  type="text"
+                  class="form-control"
+                  name="jan"
+                  placeholder="例）4901234567890"
+                  required
+                >
+                <div class="form-text">
+                  数字のみで入力してください。JANをキーに商品マスタを検索します。
+                </div>
+              </div>
+
+              <!-- 商品名（自動取得） -->
+              <div class="mb-3">
+                <label class="form-label">商品名（自動取得）</label>
+                <input
+                  type="text"
+                  class="form-control"
+                  value="送信時に商品マスタから自動で補完されます"
+                  disabled
+                >
+                <div class="form-text">
+                  フォーム送信時に、登録済みの商品マスタから該当商品の商品名を取得して保存します。
+                </div>
+              </div>
+
+              <!-- 価格 -->
+              <div class="mb-4">
+                <label class="form-label">価格（税込） <span class="text-danger">*</span></label>
+                <div class="input-group">
                   <input
-                    type="text"
-                    name="store_name"
+                    type="number"
                     class="form-control"
-                    placeholder="例）スーパーA 広島駅前店"
-                    value="{{ store_name or '' }}"
+                    name="price"
+                    min="1"
+                    step="1"
+                    placeholder="例）158"
                     required
                   >
-                  <div class="form-text">
-                    近隣店舗検索から遷移した場合は自動入力されます。手入力も可能です。
-                  </div>
+                  <span class="input-group-text">円</span>
                 </div>
+              </div>
 
-                <!-- JANコード＋商品名表示（商品名はサーバ側で自動取得） -->
-                <div class="row g-3 mb-3">
-                  <div class="col-md-6">
-                    <label class="form-label">
-                      JANコード <span class="text-danger">*</span>
-                    </label>
-                    <input
-                      type="text"
-                      name="jan"
-                      class="form-control"
-                      placeholder="例）4901234567890"
-                      required
-                    >
-                    <div class="form-text">
-                      数字のみで入力してください。JANをキーに商品マスタを検索します。
-                    </div>
-                  </div>
-
-                  <div class="col-md-6">
-                    <label class="form-label">商品名（自動取得）</label>
-                    <input
-                      type="text"
-                      class="form-control"
-                      placeholder="送信時に商品マスタから自動で補完されます"
-                      disabled
-                    >
-                    <div class="form-text">
-                      フォーム送信時に、登録済みの商品マスタから商品名を取得して保存します。
-                    </div>
-                  </div>
-                </div>
-
-                <!-- 価格 -->
-                <div class="mb-4">
-                  <label class="form-label">価格（税込） <span class="text-danger">*</span></label>
-                  <div class="input-group">
-                    <input
-                      type="number"
-                      name="price"
-                      class="form-control"
-                      min="1"
-                      step="1"
-                      required
-                    >
-                    <span class="input-group-text">円</span>
-                  </div>
-                </div>
-
-                <div class="d-flex justify-content-between align-items-center">
-                  <a href="{{ url_for('home') }}" class="btn btn-outline-secondary">
-                    ホームに戻る
-                  </a>
-                  <button type="submit" class="btn btn-primary">
-                    価格を投稿する
-                  </button>
-                </div>
-              </form>
-            </div>
+              <div class="d-flex justify-content-between">
+                <a href="{{ url_for('home') }}" class="btn btn-outline-secondary">
+                  ホームに戻る
+                </a>
+                <button type="submit" class="btn btn-primary">
+                  価格を投稿する
+                </button>
+              </div>
+            </form>
           </div>
         </div>
+      </div>
 
-        <!-- 右：最近の投稿 -->
-        <div class="col-lg-5">
-          <div class="card card-sub shadow-sm">
-            <div class="card-body p-4">
-              <h6 class="card-title mb-3">最近投稿された価格</h6>
-              {% if recent_posts and recent_posts|length > 0 %}
-                <div class="vstack">
-                  {% for p in recent_posts|reverse %}
-                    <div class="post-item p-3 shadow-sm">
-                      <div class="small text-muted mb-1">
-                        {{ p.posted_at }} / {{ p.user_email or "ゲスト" }}
-                      </div>
-                      <div class="fw-semibold mb-1">
-                        {{ p.product_name }}
-                        {% if p.jan %}
-                          <span class="text-muted small">（JAN: {{ p.jan }}）</span>
-                        {% endif %}
-                      </div>
-                      <div class="small text-muted">
-                        店舗：{{ p.store_name }}
-                      </div>
-                      <div class="mt-1">
-                        <span class="badge badge-price">
-                          {{ p.price }} 円
-                        </span>
-                      </div>
+      <!-- 右：最近投稿された価格 -->
+      <div class="col-lg-5">
+        <div class="card card-side shadow-sm">
+          <div class="card-body">
+            <h2 class="h5 mb-3">最近投稿された価格</h2>
+            {% if recent_posts %}
+              <ul class="list-group list-group-flush small">
+                {% for p in recent_posts %}
+                  <li class="list-group-item px-0">
+                    <div class="fw-bold">{{ p.product_name }}</div>
+                    <div class="text-muted">
+                      {{ p.store_name }} / {{ p.price }}円
+                      <span class="ms-2">{{ p.posted_at }}</span>
                     </div>
-                  {% endfor %}
-                </div>
-              {% else %}
-                <p class="text-muted small mb-0">
-                  まだ価格情報が投稿されていません。左のフォームから最初の1件を投稿してみましょう。
-                </p>
-              {% endif %}
-            </div>
+                    {% if p.user_email %}
+                      <div class="text-muted">
+                        投稿者: {{ p.user_email }}
+                      </div>
+                    {% endif %}
+                  </li>
+                {% endfor %}
+              </ul>
+            {% else %}
+              <p class="text-muted small mb-0">
+                まだ価格情報が投稿されていません。左のフォームから最初の1件を投稿してみましょう。
+              </p>
+            {% endif %}
           </div>
         </div>
       </div>
     </div>
   </main>
+
+  <!-- 店舗サジェスト用スクリプト -->
+  <script>
+  (() => {
+    const input = document.getElementById("store_name");
+    const hiddenId = document.getElementById("store_id");
+    const list = document.getElementById("store_suggest_list");
+
+    if (!input || !list) return;
+
+    let timer = null;
+
+    function hideList() {
+      list.style.display = "none";
+      list.innerHTML = "";
+    }
+
+    input.addEventListener("input", () => {
+      // 手入力されたら一旦 id をクリア
+      if (hiddenId) hiddenId.value = "";
+
+      const q = input.value.trim();
+      if (timer) clearTimeout(timer);
+
+      if (q.length < 2) {
+        hideList();
+        return;
+      }
+
+      timer = setTimeout(() => {
+        fetch(`/api/store_suggest?q=${encodeURIComponent(q)}`)
+          .then(r => r.json())
+          .then(data => {
+            const stores = data.stores || [];
+            list.innerHTML = "";
+
+            if (!stores.length) {
+              hideList();
+              return;
+            }
+
+            stores.forEach(s => {
+              const btn = document.createElement("button");
+              btn.type = "button";
+              btn.className = "list-group-item list-group-item-action py-1";
+              btn.textContent = s.name + (s.address ? `（${s.address}）` : "");
+              btn.addEventListener("click", () => {
+                input.value = s.name;
+                if (hiddenId) hiddenId.value = s.id;
+                hideList();
+              });
+              list.appendChild(btn);
+            });
+
+            list.style.display = "block";
+          })
+          .catch(err => {
+            console.error("store_suggest error:", err);
+            hideList();
+          });
+      }, 300);
+    });
+
+    // フォーム以外をクリックしたら候補を閉じる
+    document.addEventListener("click", (e) => {
+      if (e.target === input || list.contains(e.target)) return;
+      hideList();
+    });
+  })();
+  </script>
 </body>
 </html>
