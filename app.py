@@ -505,21 +505,38 @@ def purchases():
 def cart():
     return _placeholder("買い物メモ画面")
 
+# ------------------------------
+# お気に入り商品 トグル（商品検索画面の★）
+# ------------------------------
 @app.route("/favorite/toggle", methods=["POST"])
 def favorite_toggle():
-    if "user_id" not in session:
-        return jsonify({"ok": False, "error": "not_logged_in"}), 401
+    # ログインしていなければログイン画面へ
+    if not is_logged_in():
+        flash("お気に入り機能を使うにはログインしてください。", "warning")
+        return redirect(url_for("login"))
 
-    user_id = session["user_id"]
-    product_id = request.form.get("product_id")
+    product_id_raw = request.form.get("product_id")
+    try:
+        product_id = int(product_id_raw)
+    except (TypeError, ValueError):
+        flash("不正な商品です。", "danger")
+        return redirect(request.referrer or url_for("search_products"))
+
+    user_id = session.get("user_id")
+    if user_id is None:
+        flash("ユーザー情報が取得できませんでした。", "danger")
+        return redirect(url_for("login"))
 
     try:
-        from dao.favorite_dao import FavoriteDAO
-    except Exception:
-        return jsonify({"ok": False, "error": "DAO_import_error"}), 500
+        # dao.favorite_dao から import している FavoriteDAO をそのまま利用
+        FavoriteDAO.toggle(user_id, product_id)
+    except Exception as e:
+        print("ERROR favorite_toggle:", repr(e))
+        flash("お気に入り更新中にエラーが発生しました。", "danger")
+        return redirect(request.referrer or url_for("search_products"))
 
-    favorited = FavoriteDAO.toggle(user_id, product_id)
-    return jsonify({"ok": True, "favorited": favorited})
+    # ★ 成功したら元のページ（検索画面）に戻る
+    return redirect(request.referrer or url_for("search_products"))
 
 
 # =========================

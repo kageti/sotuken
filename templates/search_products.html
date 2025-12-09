@@ -41,11 +41,31 @@
       border: 1px solid #e5e7eb;
       background: #ffffff;
       transition: transform .12s ease, box-shadow .12s ease;
+      position: relative;
     }
 
     .result-card:hover {
       transform: translateY(-2px);
       box-shadow: 0 10px 24px rgba(15, 23, 42, 0.06);
+    }
+
+    /* 星ボタン */
+    .favorite-btn {
+      position: absolute;
+      top: 8px;
+      right: 12px;
+      background: none;
+      border: none;
+      font-size: 1.6rem;
+      cursor: pointer;
+      padding: 0;
+      line-height: 1;
+    }
+    .star-on {
+      color: #facc15;
+    }
+    .star-off {
+      color: #d1d5db;
     }
 
     .badge-jan {
@@ -66,32 +86,19 @@
       font-size: 1.4rem;
       font-weight: 700;
     }
-
-    .memo-label {
-      font-size: .85rem;
-      color: #6b7280;
-    }
-
-    @media (max-width: 767.98px) {
-      .app-shell {
-        padding-inline: .75rem;
-      }
-    }
   </style>
 </head>
+
 <body>
   <!-- ヘッダー -->
   <header class="page-header py-3 mb-3">
     <div class="app-shell d-flex justify-content-between align-items-center px-3 px-md-0">
       <div class="page-header-title h4 m-0">商品検索</div>
+
       <div class="d-flex align-items-center gap-2">
         {% if logged_in %}
-          <span class="small text-muted d-none d-md-inline">
-            {{ user }}
-          </span>
-          <a href="{{ url_for('logout') }}" class="btn btn-outline-secondary btn-sm">
-            ログアウト
-          </a>
+          <span class="small text-muted d-none d-md-inline">{{ user }}</span>
+          <a href="{{ url_for('logout') }}" class="btn btn-outline-secondary btn-sm">ログアウト</a>
         {% else %}
           <a href="{{ url_for('login') }}" class="btn btn-outline-primary btn-sm">ログイン</a>
           <a href="{{ url_for('register') }}" class="btn btn-primary btn-sm">新規登録</a>
@@ -103,7 +110,7 @@
   <main class="pb-5">
     <div class="app-shell px-3 px-md-0">
 
-      <!-- 絞り込みエリア -->
+      <!-- 絞り込み -->
       <section class="mb-4">
         <div class="filter-card shadow-sm p-3 p-md-4">
           <form method="get" action="{{ url_for('search_products') }}">
@@ -114,50 +121,40 @@
                   type="text"
                   name="q"
                   class="form-control"
-                  placeholder="例）米 / 4901234567890"
                   value="{{ q }}"
+                  placeholder="例）米 / 4901234567890"
                 >
               </div>
+
               <div class="col-md-2">
                 <label class="form-label mb-1">価格(下限)</label>
                 <input
                   type="number"
                   name="price_min"
                   class="form-control"
-                  min="0"
-                  step="1"
                   value="{{ price_min or '' }}"
                 >
               </div>
+
               <div class="col-md-2">
                 <label class="form-label mb-1">価格(上限)</label>
                 <input
                   type="number"
                   name="price_max"
                   class="form-control"
-                  min="0"
-                  step="1"
                   value="{{ price_max or '' }}"
                 >
               </div>
+
               <div class="col-md-4">
                 <label class="form-label mb-1">並び替え</label>
                 <div class="d-flex gap-2">
-                  <select
-                    name="sort"
-                    class="form-select"
-                    onchange="this.form.submit()"
-                  >
-                    <option value="price_asc"  {% if sort == 'price_asc' %}selected{% endif %}>
-                      価格が安い順
-                    </option>
-                    <option value="recent"     {% if sort == 'recent' %}selected{% endif %}>
-                      更新が新しい順
-                    </option>
-                    <option value="trust_desc" {% if sort == 'trust_desc' %}selected{% endif %}>
-                      信頼度が高い順
-                    </option>
+                  <select name="sort" class="form-select" onchange="this.form.submit()">
+                    <option value="price_asc"  {{ 'selected' if sort == 'price_asc'  else '' }}>価格が安い順</option>
+                    <option value="recent"     {{ 'selected' if sort == 'recent'     else '' }}>更新が新しい順</option>
+                    <option value="trust_desc" {{ 'selected' if sort == 'trust_desc' else '' }}>信頼値が高い順</option>
                   </select>
+
                   <a href="{{ url_for('home') }}" class="btn btn-outline-secondary">
                     ホームに戻る
                   </a>
@@ -165,14 +162,8 @@
               </div>
             </div>
 
-            <div class="d-flex gap-2">
-              <button type="submit" class="btn btn-primary">
-                検索
-              </button>
-              <a href="{{ url_for('search_products') }}" class="btn btn-outline-secondary">
-                リセット
-              </a>
-            </div>
+            <button type="submit" class="btn btn-primary">検索</button>
+            <a href="{{ url_for('search_products') }}" class="btn btn-outline-secondary ms-2">リセット</a>
           </form>
         </div>
       </section>
@@ -188,11 +179,22 @@
             {% for p in results %}
               <div class="col-lg-4 col-md-6">
                 <div class="result-card p-3 h-100 d-flex flex-column">
-                  <!-- 上段：商品情報 -->
+
+                  <!-- ★お気に入り -->
+                  <form method="post" action="{{ url_for('favorite_toggle') }}">
+                    <input type="hidden" name="product_id" value="{{ p.id }}">
+                    <button type="submit" class="favorite-btn">
+                      {% if p.favorited %}
+                        <span class="star-on">★</span>
+                      {% else %}
+                        <span class="star-off">☆</span>
+                      {% endif %}
+                    </button>
+                  </form>
+
+                  <!-- 商品情報 -->
                   <div class="mb-2">
-                    <div class="fw-semibold mb-1">
-                      {{ p.name }}
-                    </div>
+                    <div class="fw-semibold mb-1">{{ p.name }}</div>
 
                     <div class="d-flex flex-wrap gap-1 mb-2">
                       {% if p.jan %}
@@ -201,28 +203,20 @@
                         </span>
                       {% endif %}
                       {% if p.origin %}
-                        <span class="badge-pill-soft">
-                          {{ p.origin }}
-                        </span>
+                        <span class="badge-pill-soft">{{ p.origin }}</span>
                       {% endif %}
                       {% if p.category %}
-                        <span class="badge-pill-soft">
-                          {{ p.category }}
-                        </span>
+                        <span class="badge-pill-soft">{{ p.category }}</span>
                       {% endif %}
                     </div>
 
-                    {% if p.price %}
-                      <div class="price-main mb-1">
-                        ¥{{ p.price }}
-                      </div>
+                    {% if p.price is not none %}
+                      <div class="price-main">¥{{ p.price }}</div>
                     {% endif %}
 
-                    <div class="small text-muted">
-                      {% if p.store_name %}
-                        / {{ p.store_name }}
-                      {% endif %}
-                    </div>
+                    {% if p.store_name %}
+                      <div class="small text-muted">/ {{ p.store_name }}</div>
+                    {% endif %}
 
                     <div class="d-flex justify-content-between small text-muted mt-1">
                       <span>
@@ -234,25 +228,28 @@
                         {% endif %}
                       </span>
                       <span>
-                        更新: {% if p.updated_at %}{{ p.updated_at }}{% else %}-{% endif %}
+                        更新:
+                        {% if p.updated_at %}
+                          {{ p.updated_at }}
+                        {% else %}
+                          -
+                        {% endif %}
                       </span>
                     </div>
 
-                    <div class="mt-3">
-                      <button class="btn btn-outline-secondary w-100" disabled>
-                        詳細（準備中）
-                      </button>
-                    </div>
+                    <button class="btn btn-outline-secondary w-100 mt-3" disabled>
+                      詳細（準備中）
+                    </button>
                   </div>
 
-                  <!-- 下段：買い物メモ -->
+                  <!-- 買い物メモ -->
                   <div class="mt-auto pt-2">
-                    <div class="memo-label mb-1">買い物メモ</div>
+                    <div class="small text-muted mb-1">買い物メモ</div>
                     <div class="row g-2">
                       <div class="col-6">
                         <form method="post" action="{{ url_for('add_to_memo') }}">
-                          <input type="hidden" name="product_id" value="{{ p.id }}">
                           <input type="hidden" name="action" value="add">
+                          <input type="hidden" name="product_id" value="{{ p.id }}">
                           <button
                             type="submit"
                             class="btn btn-success w-100"
@@ -264,8 +261,8 @@
                       </div>
                       <div class="col-6">
                         <form method="post" action="{{ url_for('add_to_memo') }}">
-                          <input type="hidden" name="product_id" value="{{ p.id }}">
                           <input type="hidden" name="action" value="remove">
+                          <input type="hidden" name="product_id" value="{{ p.id }}">
                           <button
                             type="submit"
                             class="btn btn-outline-danger w-100"
@@ -277,6 +274,7 @@
                       </div>
                     </div>
                   </div>
+
                 </div>
               </div>
             {% endfor %}
