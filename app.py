@@ -18,6 +18,7 @@ from werkzeug.security import check_password_hash
 
 from dao.products_dao import ProductDAO
 from dao.users_dao import UserDAO, UserAlreadyExists
+from dao.favorite_dao import FavoriteDAO
 from dao.favorite_stores_dao import FavoriteStoreDAO
 from dao.store_dao import StoreDAO
 
@@ -262,6 +263,13 @@ def search_products():
                     )
                     for (pid,) in cur.fetchall():
                         memo_product_ids.add(pid)
+        # ② お気に入りに登録している product_id を集める（新規）
+            favorite_product_ids = FavoriteDAO.get_favorite_ids(user_id)
+
+    # ③ 各商品にフラグを立てる
+    for p in results:
+        p.in_memo = (p.id in memo_product_ids)
+        p.favorited = (p.id in favorite_product_ids)
 
     return render_template(
         "search_products.html",
@@ -601,7 +609,7 @@ def favorite_toggle():
 
     try:
         # dao.favorite_dao から import している FavoriteDAO をそのまま利用
-        FavoriteStoreDAO.toggle(user_id, product_id)
+        FavoriteDAO.toggle(user_id, product_id)
     except Exception as e:
         print("ERROR favorite_toggle:", repr(e))
         flash("お気に入り更新中にエラーが発生しました。", "danger")
