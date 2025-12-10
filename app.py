@@ -80,7 +80,22 @@ def _parse_dt(s: str) -> datetime:
 
 
 def is_logged_in() -> bool:
-    return "user" in session
+     # ログイン中かどうかは user_id の有無で判定する
+    return "user_id" in session
+
+
+@app.context_processor
+def inject_user():
+    """
+    すべてのテンプレートから、共通で
+      - logged_in
+      - user
+    が参照できるようにする。
+    """
+    return {
+        "logged_in": is_logged_in(),
+        "user": session.get("user"),
+    }
 
 
 # ------------------------------
