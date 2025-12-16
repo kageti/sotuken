@@ -183,6 +183,8 @@
                   <!-- ★お気に入り -->
                   <form method="post" action="{{ url_for('favorite_toggle') }}">
                     <input type="hidden" name="product_id" value="{{ p.id }}">
+                    <input type="hidden" name="store_key" value="{{ p.store }}">
+                    <input type="hidden" name="store_name" value="{{ p.store }}">
                     <button type="submit" class="favorite-btn">
                       {% if p.favorited %}
                         <span class="star-on">★</span>
