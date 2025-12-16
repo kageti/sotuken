@@ -1,7 +1,7 @@
 # dao/products_dao.py
 from typing import List, Optional
 from datetime import datetime
-from contextlib import closing   # ★ 追加
+from contextlib import closing
 from db import get_connection
 
 
@@ -36,9 +36,6 @@ class ProductDAO:
 
     @staticmethod
     def search_by_keyword(keyword: str) -> List[Product]:
-        """
-        フリーワード検索（名前・ブランド・カテゴリ・店舗名・JAN）
-        """
         sql = """
             SELECT
                 product_id AS id,
@@ -60,7 +57,6 @@ class ProductDAO:
         like = f"%{keyword}%"
         conn = get_connection()
         try:
-            # ★ ここを closing(...) に変更
             with closing(conn.cursor(dictionary=True)) as cur:
                 cur.execute(sql, (like, like, like, like, like))
                 rows = cur.fetchall()
@@ -89,9 +85,7 @@ class ProductDAO:
             with closing(conn.cursor(dictionary=True)) as cur:
                 cur.execute(sql, (product_id,))
                 row = cur.fetchone()
-            if row is None:
-                return None
-            return Product(**row)
+            return Product(**row) if row else None
         finally:
             conn.close()
 
@@ -116,8 +110,7 @@ class ProductDAO:
             with closing(conn.cursor(dictionary=True)) as cur:
                 cur.execute(sql, (jan,))
                 row = cur.fetchone()
-            if row is None:
-                return None
-            return Product(**row)
+            return Product(**row) if row else None
         finally:
             conn.close()
+

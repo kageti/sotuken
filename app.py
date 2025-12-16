@@ -628,7 +628,6 @@ def price_post():
         flash("価格を投稿するにはログインが必要です。", "warning")
         return redirect(url_for("login"))
 
-    # --- GET: フォーム表示 ---
     if request.method == "GET":
         prefill_store_name = request.args.get("store_name", "") or ""
         return render_template(
@@ -636,68 +635,53 @@ def price_post():
             logged_in=is_logged_in(),
             user=session.get("user"),
             store_name=prefill_store_name,
-            recent_posts=MOCK_PRICE_POSTS[-5:],  # 直近5件だけ表示
+            recent_posts=MOCK_PRICE_POSTS[-5:],
         )
 
-    # --- POST: 入力内容を検証して、メモリ上に保存 ---
+    # --- POST ---
     jan = (request.form.get("jan") or "").strip()
     store_name = (request.form.get("store_name") or "").strip()
     price_str = (request.form.get("price") or "").strip()
 
-    # ✅ JANコード必須
     if not jan:
-        flash("JANコードは必須です。入力してください。", "warning")
+        flash("JANコードは必須です。", "warning")
         return redirect(url_for("price_post"))
-
-    # ✅ JANコードは数字のみ（必要なら桁数チェックも追加可）
     if not jan.isdigit():
         flash("JANコードは数字のみで入力してください。", "warning")
         return redirect(url_for("price_post"))
-
-    # ✅ 店舗名必須
     if not store_name:
         flash("店舗名を入力してください。", "warning")
         return redirect(url_for("price_post"))
-
-    # ✅ 価格チェック
     if not price_str.isdigit():
         flash("価格は整数で入力してください。", "warning")
         return redirect(url_for("price_post"))
     price = int(price_str)
 
-    # --- DBから商品名などを取得 ---
-    # ここでは ProductDAO に find_by_jan(jan) がある前提
-    product = None
+    # JAN → 商品1件取得
     try:
-        # もしまだメソッドが無い場合は、この一行で AttributeError が出るので、
-        # 後ろに書いてある「暫定実装」を使ってください。
         product = ProductDAO.find_by_jan(jan)
-    except AttributeError:
-        # ★ 暫定版：search_by_keyword で JAN を検索して最初の1件を採用
-        candidates = ProductDAO.search_by_keyword(jan)
-        if candidates:
-            product = candidates[0]
-
-    if not product:
-        flash("このJANコードの商品が商品マスタに登録されていません。先に商品登録を行ってください。", "danger")
+    except Exception as e:
+        print("DB error find_by_jan:", repr(e))
+        flash("DBに接続できませんでした（商品マスタ取得失敗）。ネットワーク/DBを確認してください。", "danger")
         return redirect(url_for("price_post"))
 
-    # Product オブジェクトから商品名を取得（name という属性名を想定）
-    product_name = getattr(product, "name", None) or "(名称未設定)"
+    if not product:
+        flash("そのJANコードの商品が商品マスタに見つかりません。先に商品マスタへ登録してください。", "danger")
+        return redirect(url_for("price_post"))
 
+    # ここから先：DB保存 or 仮保存
     user_email = session.get("user")
-
-    # 将来 DB に差し替える箇所（今はメモリに保存）
     add_mock_price_post(
         jan=jan,
-        product_name=product_name,
+        product_name=product.name,
         store_name=store_name,
         price=price,
         user_email=user_email,
     )
 
-    flash(f"『{product_name}』の価格情報を投稿しました。（現在はアプリ内の一時保存です）", "success")
+    flash(f"『{product.name}』の価格を投稿しました。", "success")
     return redirect(url_for("price_post"))
+
 
 
 
