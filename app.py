@@ -328,6 +328,8 @@ def add_to_memo():
 
     action = request.form.get("action")  # "add" or "remove"
     product_id_raw = request.form.get("product_id")
+    store_key = request.form.get("store_key")
+    store_name = request.form.get("store_name")
 
     try:
         product_id = int(product_id_raw)
