@@ -21,6 +21,8 @@ from dao.users_dao import UserDAO, UserAlreadyExists
 from dao.favorite_dao import FavoriteDAO
 from dao.favorite_stores_dao import FavoriteStoreDAO
 from dao.store_dao import StoreDAO
+from dao.product_prices_dao import ProductPricesDAO
+
 
 
 from db import get_connection  # ← 自作の db.py から接続関数をインポート
@@ -631,59 +633,74 @@ def price_post():
         flash("価格を投稿するにはログインが必要です。", "warning")
         return redirect(url_for("login"))
 
+    user_id = session.get("user_id")
+    if user_id is None:
+        flash("ユーザー情報が取得できませんでした。", "danger")
+        return redirect(url_for("login"))
+
+    # --- GET: フォーム + 履歴表示 ---
     if request.method == "GET":
         prefill_store_name = request.args.get("store_name", "") or ""
+        recent_posts = ProductPricesDAO.list_recent(limit=10)
+
         return render_template(
             "price_post.html",
             logged_in=is_logged_in(),
             user=session.get("user"),
             store_name=prefill_store_name,
-            recent_posts=MOCK_PRICE_POSTS[-5:],
+            recent_posts=recent_posts,
         )
 
-    # --- POST ---
+    # --- POST: DBに保存 ---
     jan = (request.form.get("jan") or "").strip()
     store_name = (request.form.get("store_name") or "").strip()
+    store_id_raw = (request.form.get("store_id") or "").strip()
     price_str = (request.form.get("price") or "").strip()
 
+    # JAN必須
     if not jan:
         flash("JANコードは必須です。", "warning")
         return redirect(url_for("price_post"))
     if not jan.isdigit():
         flash("JANコードは数字のみで入力してください。", "warning")
         return redirect(url_for("price_post"))
+
     if not store_name:
         flash("店舗名を入力してください。", "warning")
         return redirect(url_for("price_post"))
+
     if not price_str.isdigit():
         flash("価格は整数で入力してください。", "warning")
         return redirect(url_for("price_post"))
     price = int(price_str)
 
-    # JAN → 商品1件取得
-    try:
-        product = ProductDAO.find_by_jan(jan)
-    except Exception as e:
-        print("DB error find_by_jan:", repr(e))
-        flash("DBに接続できませんでした（商品マスタ取得失敗）。ネットワーク/DBを確認してください。", "danger")
-        return redirect(url_for("price_post"))
+    store_id = None
+    if store_id_raw.isdigit():
+        store_id = int(store_id_raw)
 
+    # 商品マスタからJANで商品を一意特定
+    product = ProductDAO.find_by_jan(jan)
     if not product:
-        flash("そのJANコードの商品が商品マスタに見つかりません。先に商品マスタへ登録してください。", "danger")
+        flash("このJANコードの商品が商品マスタにありません。先に商品マスタへ登録してください。", "danger")
         return redirect(url_for("price_post"))
 
-    # ここから先：DB保存 or 仮保存
-    user_email = session.get("user")
-    add_mock_price_post(
-        jan=jan,
-        product_name=product.name,
+    product_id = getattr(product, "id", None)
+    product_name = getattr(product, "name", "(名称未設定)")
+
+    # ★DBへ保存（これでページ遷移しても消えない）
+    ProductPricesDAO.insert(
+        user_id=user_id,
+        store_id=store_id,
         store_name=store_name,
+        jan=jan,
+        product_id=product_id,
+        product_name=product_name,
         price=price,
-        user_email=user_email,
     )
 
-    flash(f"『{product.name}』の価格を投稿しました。", "success")
+    flash(f"『{product_name}』の価格を投稿しました。", "success")
     return redirect(url_for("price_post"))
+
 
 
 
