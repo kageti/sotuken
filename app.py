@@ -113,8 +113,8 @@ def home():
 # --- ログイン ---
 @app.route("/login", methods=["GET", "POST"])
 def login():
-    # すでにログイン済みならホームへ
-    if is_logged_in():
+    # ★ すでにログイン済みならログイン画面を表示しない
+    if "user" in session:
         return redirect(url_for("home"))
 
     if request.method == "POST":
@@ -123,26 +123,17 @@ def login():
 
         user = UserDAO.find_by_email(email)
 
-        # ★ DAO 側のプロパティ名に合わせて id / user_id を調整してね
         if user and check_password_hash(user.password_hash, password):
+            session.clear()  # ★ 念のため一度クリア
             session["user"] = email
-            session["user_id"] = getattr(user, "id", getattr(user, "user_id", None))
-            if session["user_id"] is None:
-                # 念のためフォールバック（なければログインさせない）
-                flash("ユーザーIDが取得できませんでした。", "danger")
-                return redirect(url_for("login"))
-            return redirect(url_for("home"))
-
-        # テスト用ユーザ（必要なければ消してOK）
-        if email in users and users[email]["password"] == password:
-            session["user"] = email
-            session["user_id"] = 0  # ダミー
+            session["user_id"] = user.id
             return redirect(url_for("home"))
 
         flash("メールアドレスまたはパスワードが正しくありません。", "danger")
         return redirect(url_for("login"))
 
     return render_template("login.html")
+
 
 
 # --- ログアウト ---
