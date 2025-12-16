@@ -69,6 +69,16 @@ def add_mock_price_post(jan, product_name, store_name, price, user_email):
     MOCK_PRICE_POSTS.append(post)
     return post["id"]
 
+@app.after_request
+def add_no_cache_headers(response):
+    # login画面だけはキャッシュ禁止（戻る対策）
+    if request.path == "/login":
+        response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+        response.headers["Pragma"] = "no-cache"
+        response.headers["Expires"] = "0"
+    return response
+
+
 # ------------------------------
 # ヘルパ
 # ------------------------------
