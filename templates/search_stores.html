@@ -153,9 +153,7 @@
                   </div>
                 </div>
                 <div class="text-end">
-                  <span class="badge bg-success-subtle text-success badge-type">
-                    スーパー
-                  </span>
+                  <span class="badge bg-success-subtle text-success badge-type">スーパー</span>
                   ${
                     rating
                       ? `<div class="mt-1 rating-pill">評価 ${
@@ -179,51 +177,65 @@
     
         setStatus("現在地を取得中…");
     
-        navigator.geolocation.getCurrentPosition(
-          (pos) => {
-            const { latitude, longitude } = pos.coords;
-            setStatus("近隣の店舗を検索中…");
+        // ✅ success
+        const onSuccess = (pos) => {
+          const { latitude, longitude } = pos.coords;
+          setStatus("近隣の店舗を検索中…");
     
-            fetch("/api/nearby_stores", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ lat: latitude, lng: longitude }),
+          fetch("/api/nearby_stores", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ lat: latitude, lng: longitude }),
+          })
+            .then(async (resp) => {
+              const text = await resp.text();
+              let data = {};
+              try { data = JSON.parse(text); } catch {}
+    
+              if (!resp.ok) {
+                throw new Error(data.error || `HTTPエラー (${resp.status})`);
+              }
+              if (data.error) {
+                throw new Error(data.error);
+              }
+              return data;
             })
-              .then(async (resp) => {
-                let data = {};
-                try {
-                  data = await resp.json();
-                } catch (e) {
-                  // JSON じゃないレスポンス（HTMLのエラーページなど）
-                }
+            .then((data) => {
+              setStatus("検索完了");
+              renderStores(data.places || []);
+            })
+            .catch((err) => {
+              console.error("nearby_stores error:", err);
+              setStatus("通信エラー: " + err.message);
+              renderStores([]);
+            });
+        };
     
-                if (!resp.ok) {
-                  throw new Error(data.error || `HTTPエラー (${resp.status})`);
-                }
-                if (data.error) {
-                  throw new Error(data.error);
-                }
-                return data;
-              })
-              .then((data) => {
-                setStatus("検索完了");
-                renderStores(data.places || []);
-              })
-              .catch((err) => {
-                console.error("nearby_stores error:", err);
-                setStatus("エラー: " + err.message);
-                renderStores([]);
-              });
-          },
-          (err) => {
-            console.error("geolocation error:", err);
-            setStatus("位置情報が取得できません: " + err.message);
-          },
-          { enableHighAccuracy: true, timeout: 10000 }
-        );
+        // ✅ error
+        const onError = (err) => {
+          console.error(err);
+          const codeMap = {
+            1: "PERMISSION_DENIED（権限拒否）",
+            2: "POSITION_UNAVAILABLE（位置情報取得不可）",
+            3: "TIMEOUT（タイムアウト）",
+          };
+          const codeText = codeMap[err.code] ?? `UNKNOWN(${err.code})`;
+          setStatus(`位置情報が取得できません: ${codeText} / ${err.message}`);
+          renderStores([]);
+        };
+    
+        // ✅ options
+        const options = {
+          enableHighAccuracy: false,
+          timeout: 20000,
+          maximumAge: 60000,
+        };
+    
+        navigator.geolocation.getCurrentPosition(onSuccess, onError, options);
       });
     })();
     </script>
+    
     
 
   <!-- Bootstrap Icons（住所アイコン用、不要なら削除可） -->
