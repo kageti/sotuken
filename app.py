@@ -581,9 +581,23 @@ def favorites_stores():
 #    return _placeholder("お気に入り店舗画面")
 
 
-@app.route("/purchases")
-def purchases():
-    return _placeholder("購入履歴画面")
+@app.route("/favorites")
+def favorite_products():
+    if not is_logged_in():
+        flash("ログインしてください", "warning")
+        return redirect(url_for("login"))
+
+    user_id = session.get("user_id")
+
+    favorites = FavoriteDAO.list_favorites_by_user(user_id)
+
+    return render_template(
+        "favorite_products.html",
+        favorites=favorites,
+    )
+    return render_template("favorite_products.html", favorites=favorites)
+
+
 
 
 @app.route("/cart")

@@ -43,3 +43,36 @@ class FavoriteDAO:
         ids = {row[0] for row in cur.fetchall()}
         conn.close()
         return ids
+        # dao/favorite_dao.py
+from db import get_connection
+from contextlib import closing
+
+
+class FavoriteDAO:
+    # --- 既存メソッドはそのまま ---
+
+    @classmethod
+    def list_favorites_by_user(cls, user_id: int):
+        """
+        指定ユーザーのお気に入り商品一覧を返す
+        （JANコード・商品名用）
+        """
+        sql = """
+            SELECT
+                p.product_id,
+                p.jan,
+                p.name
+            FROM favorites f
+            JOIN products p
+              ON f.product_id = p.product_id
+            WHERE f.user_id = %s
+            ORDER BY f.created_at DESC
+        """
+
+        conn = get_connection()
+        try:
+            with closing(conn.cursor(dictionary=True)) as cur:
+                cur.execute(sql, (user_id,))
+                return cur.fetchall()
+        finally:
+            conn.close()
