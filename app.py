@@ -588,14 +588,13 @@ def favorite_products():
         return redirect(url_for("login"))
 
     user_id = session.get("user_id")
-
     favorites = FavoriteDAO.list_favorites_by_user(user_id)
 
     return render_template(
         "favorite_products.html",
-        favorites=favorites,
+        favorites=favorites
     )
-    return render_template("favorite_products.html", favorites=favorites)
+
 
 
 
@@ -607,10 +606,18 @@ def cart():
 # ------------------------------
 # お気に入り商品 トグル（商品検索画面の★）
 # ------------------------------
+# ------------------------------
+# お気に入り商品 トグル（商品検索画面の★）
+# ------------------------------
 @app.route("/favorite/toggle", methods=["POST"])
 def favorite_toggle():
-    # ログインしていなければログイン画面へ
+    # fetch で呼ばれたか判定（JS側で付ける）
+    is_ajax = (request.headers.get("X-Requested-With") == "XMLHttpRequest")
+
+    # ログインしていなければ
     if not is_logged_in():
+        if is_ajax:
+            return jsonify(ok=False, error="not_logged_in"), 401
         flash("お気に入り機能を使うにはログインしてください。", "warning")
         return redirect(url_for("login"))
 
@@ -618,24 +625,35 @@ def favorite_toggle():
     try:
         product_id = int(product_id_raw)
     except (TypeError, ValueError):
+        if is_ajax:
+            return jsonify(ok=False, error="invalid_product"), 400
         flash("不正な商品です。", "danger")
         return redirect(request.referrer or url_for("search_products"))
 
     user_id = session.get("user_id")
     if user_id is None:
+        if is_ajax:
+            return jsonify(ok=False, error="invalid_user"), 400
         flash("ユーザー情報が取得できませんでした。", "danger")
         return redirect(url_for("login"))
 
     try:
-        # dao.favorite_dao から import している FavoriteDAO をそのまま利用
-        FavoriteDAO.toggle(user_id, product_id)
+        # toggle は True/False を返す想定（FavoriteDAO側に合わせる）
+        favorited = FavoriteDAO.toggle(user_id, product_id)
     except Exception as e:
         print("ERROR favorite_toggle:", repr(e))
+        if is_ajax:
+            return jsonify(ok=False, error="db_error"), 500
         flash("お気に入り更新中にエラーが発生しました。", "danger")
         return redirect(request.referrer or url_for("search_products"))
 
-    # ★ 成功したら元のページ（検索画面）に戻る
+    # ✅ fetch なら JSON で返して、画面遷移させない（スクロールしない）
+    if is_ajax:
+        return jsonify(ok=True, favorited=bool(favorited))
+
+    # ✅ 通常アクセス（JSなし等）は今まで通り戻す
     return redirect(request.referrer or url_for("search_products"))
+
 
 
 # =========================
