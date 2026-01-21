@@ -1,9 +1,8 @@
 <!doctype html>
 <html lang="ja">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <link rel="icon" href="{{ url_for('static', filename='favicon.ico') }}?v=1">
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>お気に入り商品 - 価格比較アプリ</title>
 
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
@@ -11,160 +10,87 @@
   <style>
     body { background: #f5f6f8; }
 
+    .app-shell { max-width: 1120px; margin: 0 auto; }
+
     .page-header {
       border-bottom: 1px solid #e5e7eb;
       background: #ffffff;
     }
-    .brand-title { font-weight: 800; letter-spacing: .06em; }
 
-    .shell { max-width: 1120px; }
-
-    .card-ui {
-      border-radius: 1rem;
+    .card-clickable {
+      border-radius: 1.1rem;
       border: 1px solid #e5e7eb;
-      background: #fff;
+      background: #ffffff;
+      transition: transform .12s ease, box-shadow .12s ease;
+      text-decoration: none;
+      color: inherit;
+      display: block;
     }
 
-    .subtle { color: #6b7280; font-size: .9rem; }
+    .card-clickable:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 10px 24px rgba(15, 23, 42, 0.06);
+      color: inherit;
+    }
 
-    .table thead th {
+    .badge-jan {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+                   "Liberation Mono", "Courier New", monospace;
+    }
+
+    .hint {
       color: #6b7280;
-      font-weight: 700;
-      font-size: .85rem;
-      border-bottom: 1px solid #e5e7eb;
-    }
-    .table td {
-      vertical-align: middle;
-      border-top: 1px solid #eef0f3;
-    }
-
-    .jan-badge {
-      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono","Courier New", monospace;
       font-size: .9rem;
-      background: #f3f4f6;
-      border: 1px solid #e5e7eb;
-      border-radius: .5rem;
-      padding: .25rem .5rem;
-      display: inline-block;
     }
-
-    .row-actions .btn { min-width: 110px; }
   </style>
 </head>
 
 <body>
-  <!-- ヘッダー -->
-  <header class="page-header py-2">
-    <nav class="container shell navbar navbar-expand">
-      <a class="navbar-brand brand-title" href="{{ url_for('home') }}">価格比較アプリ</a>
-
-      <div class="ms-auto d-flex align-items-center gap-2">
-        <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('home') }}">ホーム</a>
-        <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('search_products') }}">商品検索</a>
-        <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('search_stores') }}">近隣店舗検索</a>
-
-        {% if logged_in %}
-          <span class="text-muted small ms-1">{{ user }}</span>
-          <a class="btn btn-outline-danger btn-sm" href="{{ url_for('logout') }}">ログアウト</a>
-        {% else %}
-          <a class="btn btn-primary btn-sm" href="{{ url_for('login') }}">ログイン</a>
-          <a class="btn btn-outline-primary btn-sm" href="{{ url_for('register') }}">新規登録</a>
-        {% endif %}
+  <header class="page-header py-3 mb-3">
+    <div class="app-shell d-flex justify-content-between align-items-center px-3 px-md-0">
+      <div class="h4 m-0">お気に入り商品</div>
+      <div class="d-flex gap-2">
+        <a href="{{ url_for('home') }}" class="btn btn-outline-secondary btn-sm">ホーム</a>
+        <a href="{{ url_for('search_products') }}" class="btn btn-outline-secondary btn-sm">商品検索</a>
       </div>
-    </nav>
+    </div>
   </header>
 
-  <main class="container shell py-4">
-    <!-- フラッシュ -->
-    {% with messages = get_flashed_messages(with_categories=true) %}
-      {% if messages %}
-        <div class="mb-3">
-          {% for category, message in messages %}
-            <div class="alert alert-{{ category }} py-2 mb-2">{{ message }}</div>
+  <main class="pb-5">
+    <div class="app-shell px-3 px-md-0">
+      <p class="hint mb-3">カードをクリックすると、同じJANの商品を「商品検索」で表示します。</p>
+
+      {% if favorites and favorites|length > 0 %}
+        <div class="row g-3">
+          {% for f in favorites %}
+            {# ★ クリック時に商品検索へ：q=JAN で検索 #}
+            <div class="col-lg-4 col-md-6">
+              <a
+                class="card-clickable p-3 h-100"
+                href="{{ url_for('search_products') }}?q={{ f.jan | urlencode }}&sort=price_desc"
+              >
+                <div class="fw-semibold mb-1">{{ f.name }}</div>
+
+                {% if f.jan %}
+                  <span class="badge bg-dark text-light badge-jan">JAN: {{ f.jan }}</span>
+                {% else %}
+                  <span class="badge bg-secondary">JANなし</span>
+                {% endif %}
+
+                <div class="mt-2 text-muted small">
+                  クリックで同一JANの商品一覧へ →
+                </div>
+              </a>
+            </div>
           {% endfor %}
         </div>
+      {% else %}
+        <div class="card border-0 shadow-sm">
+          <div class="card-body">
+            <p class="mb-0 text-muted">お気に入り商品がまだありません。商品検索で ☆ を押すと追加されます。</p>
+          </div>
+        </div>
       {% endif %}
-    {% endwith %}
-
-    <div class="row g-4">
-      <!-- 左：お気に入り一覧 -->
-      <div class="col-lg-7">
-        <div class="card-ui shadow-sm">
-          <div class="p-4">
-            <div class="d-flex justify-content-between align-items-start gap-3">
-              <div>
-                <h1 class="h4 mb-1">★ お気に入り商品</h1>
-                <p class="subtle mb-0">商品検索で☆を押した商品を一覧表示します（ユーザーごと）。</p>
-              </div>
-              <div class="text-end">
-                <a href="{{ url_for('search_products') }}" class="btn btn-primary btn-sm">
-                  商品検索へ
-                </a>
-              </div>
-            </div>
-
-            <hr class="my-4">
-
-            {% if favorites and favorites|length > 0 %}
-              <div class="table-responsive">
-                <table class="table align-middle mb-0">
-                  <thead>
-                    <tr>
-                      <th style="width: 35%;">JANコード</th>
-                      <th>商品名</th>
-                      <th class="text-end" style="width: 20%;">操作</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {% for f in favorites %}
-                      <tr>
-                        <td>
-                          <span class="jan-badge">{{ f.jan }}</span>
-                        </td>
-                        <td class="fw-semibold">{{ f.name }}</td>
-                        <td class="text-end row-actions">
-                          <!-- 解除（トグル） -->
-                          <form method="post" action="{{ url_for('favorite_toggle') }}" class="d-inline">
-                            <input type="hidden" name="product_id" value="{{ f.product_id }}">
-                            <button type="submit" class="btn btn-outline-danger btn-sm">
-                              解除
-                            </button>
-                          </form>
-                        </td>
-                      </tr>
-                    {% endfor %}
-                  </tbody>
-                </table>
-              </div>
-            {% else %}
-              <div class="p-3 rounded-3" style="background:#f8fafc; border:1px solid #e5e7eb;">
-                <p class="subtle mb-2">お気に入り商品がまだありません。</p>
-                <a class="btn btn-outline-secondary" href="{{ url_for('search_products') }}">
-                  商品検索で☆を押して追加する
-                </a>
-              </div>
-            {% endif %}
-          </div>
-        </div>
-      </div>
-
-      <!-- 右：説明カード -->
-      <div class="col-lg-5">
-        <div class="card-ui shadow-sm">
-          <div class="p-4">
-            <h2 class="h5 mb-3">使い方</h2>
-            <ul class="subtle mb-3">
-              <li>商品検索で☆を押すとお気に入りに追加されます。</li>
-              <li>この画面では JANコードと商品名のみ表示します。</li>
-              <li>「解除」を押すとお気に入りから外れます。</li>
-            </ul>
-            <div class="d-grid gap-2">
-              <a href="{{ url_for('home') }}" class="btn btn-outline-secondary">ホームに戻る</a>
-              <a href="{{ url_for('search_products') }}" class="btn btn-primary">商品検索へ</a>
-            </div>
-          </div>
-        </div>
-      </div>
     </div>
   </main>
 </body>
