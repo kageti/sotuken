@@ -8,6 +8,10 @@ from contextlib import closing
 
 from db import get_connection
 
+@staticmethod
+def insert(**kwargs):
+    return ProductPricesDAO.add_post(**kwargs)
+
 
 @dataclass
 class PricePost:

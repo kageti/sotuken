@@ -114,24 +114,35 @@
                   placeholder="例）4901234567890"
                   required
                 >
+                <input
+  type="text"
+  class="form-control"
+  id="jan"
+  name="jan"
+  placeholder="例）4901234567890"
+  required
+>
+
                 <div class="form-text">
                   数字のみで入力してください。JANをキーに商品マスタを検索します。
                 </div>
               </div>
 
               <!-- 商品名（自動取得） -->
-              <div class="mb-3">
-                <label class="form-label">商品名（自動取得）</label>
-                <input
-                  type="text"
-                  class="form-control"
-                  value="送信時に商品マスタから自動で補完されます"
-                  disabled
-                >
-                <div class="form-text">
-                  フォーム送信時に、登録済みの商品マスタから該当商品の商品名を取得して保存します。
-                </div>
-              </div>
+<div class="mb-3">
+  <label class="form-label">商品名（自動取得）</label>
+  <input
+    type="text"
+    class="form-control"
+    id="product_name_preview"
+    value=""
+    readonly
+  >
+  <div class="form-text" id="product_name_help">
+    JANコードを入力すると商品名が表示されます。
+  </div>
+</div>
+
 
               <!-- 価格 -->
               <div class="mb-4">
@@ -265,5 +276,72 @@
     });
   })();
   </script>
+<script>
+  (() => {
+    const janInput = document.getElementById("jan");
+    const preview = document.getElementById("product_name_preview");
+    const help = document.getElementById("product_name_help");
+  
+    if (!janInput || !preview) return;
+  
+    let timer = null;
+    let lastJan = "";
+  
+    function setPreview(text, state) {
+      preview.value = text || "";
+      if (help) help.textContent = state || "";
+    }
+  
+    janInput.addEventListener("input", () => {
+      const jan = (janInput.value || "").trim();
+  
+      // 初期化
+      if (jan.length === 0) {
+        lastJan = "";
+        setPreview("", "JANコードを入力すると商品名が表示されます。");
+        return;
+      }
+  
+      // 数字以外が混ざったら表示だけ注意（送信時のバリデーションは別でOK）
+      if (!/^\d+$/.test(jan)) {
+        lastJan = jan;
+        setPreview("", "JANコードは数字のみで入力してください。");
+        return;
+      }
+  
+      // 短すぎる間は叩かない（13桁想定なら 13 でもOK）
+      if (jan.length < 8) {
+        lastJan = jan;
+        setPreview("", "もう少し入力すると商品名を検索します…");
+        return;
+      }
+  
+      // デバウンス
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(async () => {
+        if (jan === lastJan) return;
+        lastJan = jan;
+  
+        setPreview("", "商品名を検索中…");
+  
+        try {
+          const res = await fetch(`/api/product_by_jan?jan=${encodeURIComponent(jan)}`);
+          const data = await res.json();
+  
+          if (!res.ok || data.error) {
+            setPreview("", data.error || "商品が見つかりません。");
+            return;
+          }
+  
+          setPreview(data.name || "", "商品マスタから取得しました。");
+        } catch (e) {
+          console.error(e);
+          setPreview("", "通信エラーで商品名を取得できませんでした。");
+        }
+      }, 250);
+    });
+  })();
+  </script>
+  
 </body>
 </html>
